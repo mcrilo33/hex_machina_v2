@@ -20,37 +20,16 @@ classifiers = [
 python = "^3.10"
 pydantic = "^2.5.0"
 pydantic-settings = "^2.1.0"
-sqlalchemy = "^2.0.23"
-langchain = "0.3.26"
-langgraph = "*"
-langsmith = "*"
-transformers = "^4.36.0"
-pandas = "^2.1.4"
-numpy = "^1.25.2"
-matplotlib = "^3.8.2"
-prefect = "^2.14.0"
-beautifulsoup4 = "^4.12.2"
-feedparser = "^6.0.10"
 python-dotenv = "^1.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.3"
-pytest-asyncio = "^0.21.1"
-pytest-cov = "^4.1.0"
-pytest-mock = "^3.12.0"
-black = "^23.11.0"
 ruff = "^0.1.6"
 pre-commit = "^3.6.0"
-bandit = "^1.7.5"
-safety = "^2.3.5"
 
-[tool.poetry.group.docs.dependencies]
-mkdocs = "^1.5.3"
-mkdocs-material = "^9.4.8"
-mkdocstrings = {extras = ["python"], version = "^0.24.0"}
 
-[tool.poetry.scripts]
-hex-machina = "hex_machina.main:main"
+
+
 
 [build-system]
 requires = ["poetry-core"]
@@ -95,11 +74,7 @@ extend-exclude = '''
 )/
 '''
 
-[tool.isort]
-profile = "black"
-multi_line_output = 3
-line_length = 88
-known_first_party = ["hex_machina"]
+
 
 [tool.mypy]
 python_version = "3.10"
@@ -117,70 +92,12 @@ warn_unreachable = true
 strict_equality = true
 show_error_codes = true
 
-[[tool.mypy.overrides]]
-module = [
-    "langchain.*",
-    "langchain_openai.*",
-    "langchain_community.*",
-    "langgraph.*",
-    "langsmith.*",
-    "transformers.*",
-    "torch.*",
-    "celery.*",
-    "redis.*",
-    "prefect.*",
-    "httpx.*",
-    "beautifulsoup4.*",
-    "feedparser.*",
-]
-ignore_missing_imports = true
+
 
 [tool.pytest.ini_options]
 testpaths = ["src/tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = [
-    "--strict-markers",
-    "--strict-config",
-    "--cov=src/hex_machina",
-    "--cov-report=term-missing",
-    "--cov-report=html",
-    "--cov-report=xml",
-    "--cov-fail-under=80",
-]
-markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "integration: marks tests as integration tests",
-    "unit: marks tests as unit tests",
-]
 
-[tool.coverage.run]
-source = ["src/hex_machina"]
-omit = [
-    "*/tests/*",
-    "*/test_*",
-    "*/__pycache__/*",
-    "*/migrations/*",
-]
-
-[tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "def __repr__",
-    "if self.debug:",
-    "if settings.DEBUG",
-    "raise AssertionError",
-    "raise NotImplementedError",
-    "if 0:",
-    "if __name__ == .__main__.:",
-    "class .*\\bProtocol\\):",
-    "@(abc\\.)?abstractmethod",
-]
-
-[tool.bandit]
-exclude_dirs = ["tests", "src/tests"]
-skips = ["B101", "B601"]
-
-[tool.safety]
-output = "json" 
+ 
