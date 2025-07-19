@@ -21,11 +21,11 @@ python = "^3.10"
 pydantic = "^2.5.0"
 pydantic-settings = "^2.1.0"
 sqlalchemy = "^2.0.23"
-langchain = "^0.1.0"
-langchain-openai = "^0.0.2"
-langchain-community = "^0.0.10"
+langchain = "^0.1.20"
+langchain-openai = "^0.0.5"
+langchain-community = "^0.0.20"
 langgraph = "^0.0.20"
-langsmith = "^0.0.69"
+langsmith = "^0.1.17"
 transformers = "^4.36.0"
 pandas = "^2.1.4"
 numpy = "^1.25.2"
@@ -130,6 +130,10 @@ module = [
     "torch.*",
     "celery.*",
     "redis.*",
+    "prefect.*",
+    "httpx.*",
+    "beautifulsoup4.*",
+    "feedparser.*",
 ]
 ignore_missing_imports = true
 
