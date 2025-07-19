@@ -1,0 +1,28 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Technology Stack
+
+- **Python Version:** Python 3.10+
+- **Dependency Management:** Poetry
+- **Code Formatting:** Ruff (replaces `black`, `isort`, `flake8`)
+- **Type Hinting:** Strictly use the `typing` module. All functions, methods, and class members must have type annotations.
+- **Testing Framework:** `pytest`
+- **Documentation:** Google style docstring
+- **Environment Management:** `conda` / `venv`
+- **Containerization:** `docker`, `docker-compose`
+- **Asynchronous Programming:** Prefer `async` and `await`
+- **Web Framework:** `fastapi`
+- **Demo Framework:** `gradio`, `streamlit`
+- **LLM Framework:** `langchain`, `langGraph`, `langSmith`, `transformers`
+- **Vector Database:** `Postgres` + `pgvector`
+- **Experiment Tracking:** `mlflow`, `tensorboard` (optional)
+- **Hyperparameter Optimization:** `optuna`, `hyperopt` (optional)
+- **Data Processing:** `pandas`, `numpy`, `matplotlib`, `dask` (optional), `pyspark` (optional)
+- **Database:** `SQLAlchemy`
+- **Workflow orchestrator:** `Prefect3` + `ControlFlow`
+- **Version Control:** `git`
+- **Server:** `gunicorn`, `uvicorn` (with `nginx` or `caddy`)
+- **Process Management:** `systemd`, `supervisor`

@@ -1,0 +1,64 @@
+# === WATCHER HEADER START ===
+# File: .cursorrules
+# Managed by file watcher
+# Project Tree Structure:
+# 
+# NOTE TO ASSISTANT: Remember to add new files to .watchlist to receive headers.
+#       Files not in .watchlist won't receive headers, even if visible in this tree.
+# 
+# NOTE TO ASSISTANT: If you notice directories that don't add value to the context
+#       (like build outputs, cache, etc), suggest adding them to .donotwatchlist
+#       to keep the tree structure focused and clean.
+# 
+# ├── .cursor
+# │   └── rules
+# │       ├── opinionated-coding-clarity.mdc  # unwatched
+# │       ├── opinionated-coding-guidelines.mdc  # unwatched
+# │       ├── opinionated-ds-role.mdc  # unwatched
+# │       ├── opinionated-ds-stack.mdc  # unwatched
+# │       └── opinionated-others.mdc  # unwatched
+# ├── .cursorrules  # unwatched
+# ├── .donotwatchlist  # unwatched
+# ├── .watchlist  # unwatched
+# ├── cursor-watchful-headers
+# │   ├── .donotwatchlist  # unwatched
+# │   ├── .watchlist  # unwatched
+# │   ├── LICENSE  # unwatched
+# │   ├── README.md  # unwatched
+# │   ├── foods
+# │   │   ├── beverages
+# │   │   │   ├── juice.txt  # unwatched
+# │   │   │   ├── smoothie.txt  # unwatched
+# │   │   │   └── tea.txt  # unwatched
+# │   │   ├── dairy
+# │   │   │   ├── cheese.txt  # unwatched
+# │   │   │   ├── milk.txt  # unwatched
+# │   │   │   └── yogurt.txt  # unwatched
+# │   │   ├── fruits
+# │   │   │   ├── apple.txt  # unwatched
+# │   │   │   ├── banana.txt  # unwatched
+# │   │   │   ├── mango.txt  # unwatched
+# │   │   │   └── orange.txt  # unwatched
+# │   │   ├── grains
+# │   │   │   ├── bread.txt  # unwatched
+# │   │   │   ├── pasta.txt  # unwatched
+# │   │   │   └── rice.txt  # unwatched
+# │   │   ├── guilty_pleasures
+# │   │   │   ├── cake.txt  # unwatched
+# │   │   │   ├── chocolate.txt  # unwatched
+# │   │   │   └── icecream.txt  # unwatched
+# │   │   ├── snacks
+# │   │   │   ├── chips.txt  # unwatched
+# │   │   │   ├── nuts.txt  # unwatched
+# │   │   │   └── popcorn.txt  # unwatched
+# │   │   └── vegetables
+# │   │       ├── broccoli.txt  # unwatched
+# │   │       ├── carrot.txt  # unwatched
+# │   │       └── spinach.txt  # unwatched
+# │   ├── install.py  # unwatched
+# │   ├── requirements.txt  # unwatched
+# │   └── watcher.py  # unwatched
+# └── watcher.py  # unwatched
+# 
+# === WATCHER HEADER END ===
+# This file will be automatically updated with the project tree structure
