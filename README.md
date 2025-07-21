@@ -1,117 +1,63 @@
 # Hex Machina v2
 
-◉ Hex Machina v2 – An AI-driven recurrent digest of the latest AI research and news.
+AI-driven newsletter service that automatically monitors AI research and delivers concise summaries.
 
-## Overview
+## Quick Start (No Docker, No Postgres)
 
-Hex Machina is a free, AI-driven newsletter service that automatically monitors AI research, blogs, and announcements, summarizes key insights, and delivers high-quality, concise newsletters.
+### 1. Install Python dependencies
+```bash
+poetry install --only=main,dev
+```
 
-**AI News, Compiled by the Machine.** You can find the newsletter at: https://hexmachina.beehiiv.com/
+### 2. Set environment variables (optional)
+```bash
+# Example: (customize as needed)
+export APP_NAME="Hex Machina v2"
+export APP_VERSION="0.1.0"
+```
+
+### 3. Run the Ingestion Pipeline
+```bash
+poetry run python -m src.hex_machina.ingestion.ingestion_script --config tests/data/testing_scraping_config.yaml --verbose
+```
+- The pipeline is modular: all DB logic is in the storage module, and scrapers are fully decoupled from storage.
+- Playwright-based scrapers can be configured via the YAML config (`scrapers.playwright.launch_args`).
+- Ingestion metadata (including git commit, branch, and repo) is tracked for every run.
+
+### 4. Run the End-to-End Test Workflow
+```bash
+python tests/data/run_ingestion_with_local_server.py
+```
+- This script:
+  - Starts a local HTTP server for test HTML files
+  - Updates the test feed to use `http://localhost:8000/` URLs
+  - Runs the ingestion pipeline
+  - Runs pytest to verify the ingested data (deduplication, error handling, metadata, etc.)
+  - Cleans up the test DB and server
+
+## Configuration
+- **Test feeds:** Located in `tests/data/test_feed.xml` (edit or regenerate as needed)
+- **Playwright launch args:** Set in `tests/data/testing_scraping_config.yaml` under `scrapers.playwright.launch_args`
+- **Database path:** Set in the config under `global.db_path`
 
 ## Features
+- Modular ingestion pipeline with pluggable storage (DuckDB + SQLAlchemy)
+- Robust error handling and deduplication
+- Per-article and per-run metadata, including git provenance
+- Configurable Playwright browser flags for local and CI testing
+- Automated end-to-end test with local server and pytest
 
-- **Ingestion**: Ingests articles from AI-related websites
-- **Article Enrichment**: Adds tags, summaries, and metadata
-- **Selection**: Selects most relevant items using unsupervised methods
-- **Newsletter Generation**: Compiles and formats weekly updates
-- **Orchestration**: Runs the full pipeline automatically
+## Local Development
+- No Docker or database server required.
+- All storage is local and file-based for fast iteration.
+- Test and dev artifacts (`.db`, `.bak`, etc.) are ignored via `.gitignore`.
 
-## Technology Stack
+## Git Metadata
+- Every ingestion run records the current git commit, branch, and repo in the `IngestionOperation` table for reproducibility and auditability.
 
-- **Python**: 3.10+
-- **Dependency Management**: Poetry
-- **Code Quality**: Ruff (formatting, linting, import sorting)
-- **Type Checking**: Strict typing with `typing` module
-- **Testing**: pytest
-- **Documentation**: Google-style docstrings
-- **Async Programming**: `async`/`await` patterns
-- **Web Framework**: FastAPI
-- **LLM Framework**: LangChain, LangGraph, LangSmith
-- **Vector Database**: PostgreSQL + pgvector
-- **Workflow Orchestration**: Prefect3 + ControlFlow
-- **Containerization**: Docker & Docker Compose
+## Error Handling
+- All errors (connection, HTTP status, parsing, etc.) are tracked per article in the database for easy debugging and analysis.
 
-## Project Structure
+---
 
-```
-hex_machina_v2/
-├── src/
-│   ├── hex_machina/
-│   │   ├── __init__.py
-│   │   ├── ingestion/
-│   │   ├── enrichment/
-│   │   ├── selection/
-│   │   ├── generation/
-│   │   └── orchestration/
-│   └── tests/
-├── config/
-├── docker/
-├── scripts/
-├── docs/
-├── .github/
-│   └── workflows/
-├── pyproject.toml
-├── Dockerfile
-├── docker-compose.yml
-└── README.md
-```
-
-## Quick Start
-
-### Prerequisites
-
-- Python 3.10+
-- Poetry
-- Docker & Docker Compose (optional)
-
-### Installation
-
-1. Clone the repository:
-```bash
-git clone https://github.com/mcrilo33/hex_machina_v2.git
-cd hex_machina_v2
-```
-
-2. Install dependencies:
-```bash
-poetry install
-```
-
-3. Set up environment variables:
-```bash
-cp .env.example .env
-# Edit .env with your API keys
-```
-
-## Development
-
-### Code Quality
-
-- **Formatting**: `poetry run ruff format`
-- **Linting**: `poetry run ruff check`
-- **Type Checking**: `poetry run mypy src/`
-- **Testing**: `poetry run pytest`
-
-### Pre-commit Hooks
-
-Install pre-commit hooks:
-```bash
-poetry run pre-commit install
-```
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests and quality checks
-5. Submit a pull request
-
-## License
-
-The code is public, you can look at it, but this software is proprietary and owned by **Mathieu Crilout**.  
-Unauthorized use, distribution, or modification is prohibited.
-
-## Contact
-
-For questions or contributions, contact **Mathieu Crilout** at <mathieu.crilout@gmail.com>.
+**Ready to push your first version!**

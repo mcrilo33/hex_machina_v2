@@ -1,0 +1,22 @@
+global:
+  articles_limit: 5
+  date_threshold: '2024-01-01'
+  db_path: 'data/hex_machina_test.db'
+
+rss_feeds:
+  playwright:
+    - name: "Local Test Feed"
+      url: "file:///Users/mathieucrilout/Repos/hex_machina_v2/tests/ingestion/data/test_feed_1.xml"
+      enabled: true
+  stealth_playwright:
+    - name: "Local Test Feed"
+      url: "file:///Users/mathieucrilout/Repos/hex_machina_v2/tests/ingestion/data/test_feed_2.xml"
+      enabled: true
+
+scrapers:
+  playwright:
+    launch_args:
+      - "--allow-file-access-from-files"
+  stealth_playwright:
+    launch_args:
+      - "--allow-file-access-from-files" 

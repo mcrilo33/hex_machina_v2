@@ -1,0 +1,10 @@
+# .ruff.toml
+
+# Directories or files to ignore completely
+exclude = [
+    ".cursor",
+]
+
+# You can also specify rules, line length, etc.
+line-length = 88
+target-version = "py310"

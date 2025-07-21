@@ -1,0 +1,43 @@
+# Scraping Configuration for Hex Machina v2
+# This file configures different scraper types and their RSS feeds
+
+# Global scraping settings
+global:
+  articles_limit: 100  # Maximum articles to process per run
+  date_threshold: "2024-01-01"  # Only process articles newer than this date
+  timeout: 30  # Timeout for page loading in seconds
+
+# RSS Feed configurations by scraper type
+rss_feeds:
+  playwright:
+    - name: "AWS Blog"
+      url: "https://www.aws.amazon.com/rss"
+      enabled: true
+    - name: "TechCrunch"
+      url: "https://feeds.feedburner.com/TechCrunch/"
+      enabled: false
+    - name: "Ars Technica"
+      url: "https://feeds.arstechnica.com/arstechnica/index"
+      enabled: false
+
+  stealth_playwright:
+    - name: "AWS Blog"
+      url: "https://www.aws.amazon.com/rss"
+    - name: "OpenAI Blog"
+      url: "https://blog.openai.com/rss.xml"
+      enabled: false
+    - name: "Anthropic Blog"
+      url: "https://feeds.feedburner.com/Anthropic"
+      enabled: false
+
+# Scraper-specific settings
+scrapers:
+  playwright:
+    headless: true
+    wait_until: "networkidle"
+    user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    
+  stealth_playwright:
+    headless: true
+    wait_until: "networkidle"
+    stealth_mode: true 

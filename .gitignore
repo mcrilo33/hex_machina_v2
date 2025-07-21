@@ -189,3 +189,10 @@ dump.rdb
 # Backup files
 *.bak
 *.backup 
+
+# Cursor
+.cursor/
+cursor-watchful-headers/
+.donotwatchlist
+.watchlist
+.cursorrules
