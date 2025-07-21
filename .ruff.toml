@@ -8,3 +8,5 @@ exclude = [
 # You can also specify rules, line length, etc.
 line-length = 88
 target-version = "py310"
+
+ignore = ["E711"]
