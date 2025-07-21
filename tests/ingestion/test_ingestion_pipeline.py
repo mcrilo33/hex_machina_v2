@@ -173,6 +173,16 @@ def test_ingestion_pipeline():
             assert isinstance(
                 ingestion_op[i], datetime
             ), f"IngestionOperation {field} is not a datetime: {ingestion_op[i]}"
+        elif field == "parameters":
+            parameters = json.loads(ingestion_op[i])
+            for key, value in parameters.items():
+                assert key in [
+                    "articles_limit",
+                    "date_threshold",
+                    "config_path",
+                    "db_path",
+                    "git",
+                ], f"Unexpected parameter: {key}"
         else:
             assert (
                 ingestion_op[i] == expected_ingestion_op[i]

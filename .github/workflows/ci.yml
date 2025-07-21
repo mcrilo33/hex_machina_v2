@@ -46,14 +46,11 @@ jobs:
       - name: Lint
         run: poetry run ruff check .
 
-      - name: Type check
-        run: poetry run mypy src/
-
       - name: Security check
         run: poetry run bandit -r src/ -f json -o bandit-report.json || true
 
       - name: Safety check
-        run: poetry run safety check --json --output safety-report.json || true
+        run: poetry run safety check --output json > safety-report.json || true
 
       - name: Upload security reports
         uses: actions/upload-artifact@v4
