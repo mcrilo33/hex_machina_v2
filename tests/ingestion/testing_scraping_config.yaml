@@ -1,5 +1,5 @@
 global:
-  articles_limit: 5
+  articles_limit: 4
   date_threshold: '2024-01-01'
   db_path: 'data/hex_machina_test.db'
 
@@ -15,8 +15,47 @@ rss_feeds:
 
 scrapers:
   playwright:
+    browser_type: "chromium"
+    headless: true
     launch_args:
       - "--allow-file-access-from-files"
+      - "--disable-blink-features=AutomationControlled"
+      - "--no-sandbox"
+    wait_until: "networkidle"
+    viewport:
+      width: 1920
+      height: 1080
+    user_agent: null  # null = use Scrapy's user agent
+    java_script_enabled: true
+    ignore_https_errors: true
+    screenshot_on_error: true
+    extra_http_headers: {}
   stealth_playwright:
+    browser_type: "chromium"
+    headless: true
     launch_args:
-      - "--allow-file-access-from-files" 
+      - "--allow-file-access-from-files"
+      - "--disable-blink-features=AutomationControlled"
+      - "--no-sandbox"
+    wait_until: "networkidle"
+    viewport:
+      width: 1920
+      height: 1080
+    user_agent: null
+    java_script_enabled: true
+    ignore_https_errors: true
+    screenshot_on_error: true
+    extra_http_headers: {}
+    enable_stealth: true
+    stealth_options: {} 
+
+scrapy:
+  download_delay: 2
+  concurrent_requests: 4
+  concurrent_requests_per_domain: 2
+  user_agent: "  Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  robots_txt_obey: false
+  log_level: "DEBUG"
+  retry_enabled: true
+  retry_times: 3
+  cookies_enabled: false

@@ -244,3 +244,16 @@ class DateParser:
             True if date can be parsed, False otherwise
         """
         return cls.parse_date(date_input) is not None
+
+
+def format_datetime_for_report(dt: datetime) -> str:
+    """Format a datetime object in a European readable format (DD/MM/YYYY HH:MM:SS).
+
+    Args:
+        dt: Datetime object to format
+    Returns:
+        Formatted string or '-' if dt is None
+    """
+    if dt is None:
+        return "-"
+    return dt.strftime("%d/%m/%Y %H:%M:%S")

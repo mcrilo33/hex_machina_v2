@@ -4,8 +4,8 @@ from sqlalchemy.orm import declarative_base, relationship
 Base = declarative_base()
 
 
-class IngestionOperation(Base):
-    """Represents a single ingestion run/process.
+class IngestionOperationDB(Base):
+    """Represents a single ingestion run/process (ORM model).
 
     Attributes:
         id (int): Primary key, unique identifier for the ingestion run.
@@ -33,10 +33,10 @@ class IngestionOperation(Base):
     status = Column(String(32), nullable=False)
     parameters = Column(Text, nullable=True)
 
-    articles = relationship("Article", back_populates="ingestion_operation")
+    articles = relationship("ArticleDB", back_populates="ingestion_operation")
 
 
-class Article(Base):
+class ArticleDB(Base):
     """Represents an article and its ingestion status.
 
     Attributes:
@@ -87,4 +87,6 @@ class Article(Base):
     ingestion_error_status = Column(String(64), nullable=True)
     ingestion_error_message = Column(Text, nullable=True)
 
-    ingestion_operation = relationship("IngestionOperation", back_populates="articles")
+    ingestion_operation = relationship(
+        "IngestionOperationDB", back_populates="articles"
+    )

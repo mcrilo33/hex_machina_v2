@@ -1,11 +1,11 @@
 """Hex Machina v2 - AI-driven newsletter service."""
 
 from .ingestion import (
+    ArticleModel,
     ArticleParser,
     BaseArticleScraper,
     PlaywrightRSSArticleScraper,
     RSSArticleScraper,
-    ScrapedArticle,
     StealthPlaywrightRSSArticleScraper,
 )
 from .utils import DateParser
@@ -15,7 +15,7 @@ __author__ = "Mathieu Crilout"
 __email__ = "mathieu.crilout@gmail.com"
 
 __all__ = [
-    "ScrapedArticle",
+    "ArticleModel",
     "ArticleParser",
     "BaseArticleScraper",
     "RSSArticleScraper",

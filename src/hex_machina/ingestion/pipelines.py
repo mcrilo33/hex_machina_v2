@@ -2,15 +2,15 @@ import json
 from datetime import datetime
 from typing import Any
 
-from src.hex_machina.ingestion.models import ScrapedArticle
+from src.hex_machina.ingestion.models import ArticleModel
 from src.hex_machina.storage.manager import StorageManager
-from src.hex_machina.storage.models import Article
+from src.hex_machina.storage.models import ArticleDB
 
 GLOBAL_STORAGE_MANAGER = None
 
 
 class ArticleStorePipeline:
-    """Scrapy Item Pipeline to store ScrapedArticle items in the database using StorageManager.
+    """Scrapy Item Pipeline to store Article items in the database using StorageManager.
 
     Args:
         storage_manager (StorageManager): The storage manager instance.
@@ -33,18 +33,17 @@ class ArticleStorePipeline:
         self.ingestion_run_id = ingestion_run_id
 
     def process_item(self, item: Any, spider: Any) -> Any:
-        """Process each ScrapedArticle item and store it in the database, checking for existence.
+        """Process each Article item and store it in the database, checking for existence.
 
         Args:
-            item (Any): The item scraped (should be ScrapedArticle).
+            item (Any): The item scraped (should be Article).
             spider (Any): The spider instance (unused).
 
         Returns:
             Any: The processed item.
         """
-        # Convert item to ScrapedArticle if needed
-        if not isinstance(item, ScrapedArticle):
-            item = ScrapedArticle(**item)
+        if not isinstance(item, ArticleModel):
+            item = ArticleModel(**item)
         # Check for existence by url_domain and title
         existing = self.storage_manager._adapter.get_article_by_domain_and_title(
             item.url_domain, item.title
@@ -60,7 +59,7 @@ class ArticleStorePipeline:
         if hasattr(spider, "name"):
             ingestion_metadata["scraper_name"] = spider.name
         # Convert to Article ORM model
-        article = Article(
+        article = ArticleDB(
             title=item.title,
             url=item.url,
             source_url=item.source_url,

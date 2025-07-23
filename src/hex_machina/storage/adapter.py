@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
-from .models import Article, IngestionOperation
+from .models import ArticleDB, IngestionOperationDB
 
 
 class BaseDBAdapter(ABC):
@@ -15,8 +15,8 @@ class BaseDBAdapter(ABC):
 
     @abstractmethod
     def add_ingestion_operation(
-        self, ingestion_op: IngestionOperation
-    ) -> IngestionOperation:
+        self, ingestion_op: IngestionOperationDB
+    ) -> IngestionOperationDB:
         """Add a new ingestion operation to the database.
 
         Args:
@@ -28,7 +28,7 @@ class BaseDBAdapter(ABC):
         pass
 
     @abstractmethod
-    def get_ingestion_operation(self, op_id: int) -> Optional[IngestionOperation]:
+    def get_ingestion_operation(self, op_id: int) -> Optional[IngestionOperationDB]:
         """Retrieve an ingestion operation by its ID.
 
         Args:
@@ -41,8 +41,8 @@ class BaseDBAdapter(ABC):
 
     @abstractmethod
     def update_ingestion_operation(
-        self, ingestion_op: IngestionOperation
-    ) -> IngestionOperation:
+        self, ingestion_op: IngestionOperationDB
+    ) -> IngestionOperationDB:
         """Update an existing ingestion operation in the database.
 
         Args:
@@ -65,7 +65,7 @@ class BaseDBAdapter(ABC):
     # --- Article CRUD ---
 
     @abstractmethod
-    def add_article(self, article: Article) -> Article:
+    def add_article(self, article: ArticleDB) -> ArticleDB:
         """Add a new article to the database.
 
         Args:
@@ -77,7 +77,7 @@ class BaseDBAdapter(ABC):
         pass
 
     @abstractmethod
-    def get_article(self, article_id: int) -> Optional[Article]:
+    def get_article(self, article_id: int) -> Optional[ArticleDB]:
         """Retrieve an article by its ID.
 
         Args:
@@ -89,7 +89,7 @@ class BaseDBAdapter(ABC):
         pass
 
     @abstractmethod
-    def update_article(self, article: Article) -> Article:
+    def update_article(self, article: ArticleDB) -> ArticleDB:
         """Update an existing article in the database.
 
         Args:
@@ -110,16 +110,16 @@ class BaseDBAdapter(ABC):
         pass
 
     @abstractmethod
-    def list_articles(self) -> List[Article]:
+    def list_articles(self) -> List[ArticleDB]:
         """List all articles in the database.
 
         Returns:
-            List[Article]: List of all article ORM objects.
+            List[ArticleDB]: List of all article ORM objects.
         """
         pass
 
     @abstractmethod
-    def list_ingestion_operations(self) -> List[IngestionOperation]:
+    def list_ingestion_operations(self) -> List[IngestionOperationDB]:
         """List all ingestion operations in the database.
 
         Returns:
@@ -130,7 +130,7 @@ class BaseDBAdapter(ABC):
     @abstractmethod
     def get_article_by_domain_and_title(
         self, url_domain: str, title: str
-    ) -> Optional[Article]:
+    ) -> Optional[ArticleDB]:
         """Retrieve an article by its url_domain and title.
 
         Args:
@@ -138,6 +138,6 @@ class BaseDBAdapter(ABC):
             title (str): The title of the article.
 
         Returns:
-            Optional[Article]: The ORM object if found, else None.
+            Optional[ArticleDB]: The ORM object if found, else None.
         """
         pass

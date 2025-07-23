@@ -9,7 +9,6 @@ import scrapy
 
 from ...utils import DateParser
 from ..article_parser import ArticleParser
-from ..models import ScrapedArticle
 
 
 class BaseArticleScraper(scrapy.Spider, ABC):
@@ -17,7 +16,7 @@ class BaseArticleScraper(scrapy.Spider, ABC):
 
     Note:
         All storage and existence checking is handled by the Scrapy Item Pipeline (ArticleStorePipeline).
-        This class should only yield ScrapedArticle items and increment processed_counter accordingly.
+        This class should only yield Article items and increment processed_counter accordingly.
     """
 
     name = "base_article_scraper"  # Default name, should be overridden by subclasses
@@ -27,7 +26,6 @@ class BaseArticleScraper(scrapy.Spider, ABC):
         processed_limit: int = 100,
         limit_date: Optional[datetime] = None,
         start_urls: Optional[List[str]] = None,
-        test_mode: bool = False,
     ) -> None:
         """Initialize the scraper.
 
@@ -35,38 +33,14 @@ class BaseArticleScraper(scrapy.Spider, ABC):
             processed_limit: Maximum number of articles to process
             limit_date: Minimum date for articles (articles older than this will be skipped)
             start_urls: List of URLs to start scraping from
-            test_mode: If True, save articles with test flag for easy cleanup
         """
         super().__init__()
+        # self._logger = logging.getLogger(f"hex_machina.scraper.{self.name}")
         self.processed_counter = 0
         self.processed_limit = processed_limit or None
         self.limit_date = limit_date
         self.start_urls = start_urls or []
         self.parser = ArticleParser()
-        self.test_mode = test_mode
-        self.logger.info(
-            f"Initialized {self.name} scraper with {len(self.start_urls)} URLs"
-        )
-        if self.processed_limit:
-            self.logger.info(f"Article limit: {self.processed_limit}")
-        if self.limit_date:
-            self.logger.info(f"Date threshold: {self.limit_date.isoformat()}")
-        if self.test_mode:
-            self.logger.info(
-                "🧪 TEST MODE: Articles will be saved with test flag for easy cleanup"
-            )
-
-    def check_existence(self, url: str) -> bool:
-        """Check if article already exists in storage.
-
-        Args:
-            url: Article URL
-
-        Returns:
-            True if article exists, False otherwise
-        """
-        # TODO: Implement DB logic here
-        return False
 
     def check_published_date(self, published_date: datetime) -> bool:
         """Check if article is recent enough.
@@ -86,22 +60,6 @@ class BaseArticleScraper(scrapy.Spider, ABC):
             )
         return is_recent
 
-    def check_limit(self) -> bool:
-        """Check if we've hit the article processing limit.
-
-        Returns:
-            True if limit reached, False otherwise
-        """
-        if not self.processed_limit:
-            return False
-
-        limit_reached = self.processed_counter >= self.processed_limit
-        if limit_reached:
-            self.logger.info(
-                f"Article limit reached: {self.processed_counter}/{self.processed_limit}"
-            )
-        return limit_reached
-
     def handle_error(self, failure):
         """Handle request errors.
 
@@ -115,16 +73,18 @@ class BaseArticleScraper(scrapy.Spider, ABC):
         self.logger.info(
             f"Starting {self.name} scraper with {len(self.start_urls)} feeds"
         )
+        self.logger.info(f"Article limit: {self.processed_limit}")
+        self.logger.info(f"Date threshold: {self.limit_date.isoformat()}")
         for start_url in self.start_urls:
             self.logger.debug(f"Yielding request for RSS feed: {start_url}")
             yield scrapy.Request(
                 url=start_url,
-                callback=self.parse,
+                callback=self.parse_start_url,
                 errback=self.handle_error,
                 meta={"feed_url": start_url},
             )
 
-    def _log_scraping_summary(self, articles: List[ScrapedArticle]) -> None:
+    def _log_scraping_summary(self, articles) -> None:
         """Log a summary of the scraping results.
 
         Args:
@@ -156,14 +116,46 @@ class BaseArticleScraper(scrapy.Spider, ABC):
                     f"({article.published_date.isoformat() if article.published_date else 'No date'})"
                 )
 
+    def parse_html(self, html_content: str) -> tuple[str, Optional[str], Optional[str]]:
+        """Parse HTML content to extract text, with error handling.
+
+        Args:
+            html_content: The HTML content to parse.
+
+        Returns:
+            tuple: (text_content, error_status, error_message)
+        """
+        error_status = None
+        error_message = None
+        text_content = ""
+        try:
+            text_content = self.parser.parse_html(html_content)
+        except Exception as e:
+            self.logger.warning(f"Error extracting article text: {e}")
+            error_status = "extract_error"
+            error_message = str(e)
+        return text_content, error_status, error_message
+
     @abstractmethod
-    def parse(self, response, **kwargs):
-        """Parse the response and extract article content.
+    def parse_start_url(self, response, **kwargs):
+        """Parse the response and extract article content from the start/feed URL.
 
         Args:
             response: Scrapy response object
             **kwargs: Additional keyword arguments
         Note:
-            Subclasses should increment self.processed_counter each time a ScrapedArticle is yielded.
+            Subclasses should increment self.processed_counter each time an Article is yielded.
+        """
+        pass
+
+    @abstractmethod
+    def parse_article(self, response, **kwargs):
+        """Parse the response for an individual article page.
+
+        Args:
+            response: Scrapy response object
+            **kwargs: Additional keyword arguments
+        Returns:
+            Should yield an Article or dict matching Article fields.
         """
         pass

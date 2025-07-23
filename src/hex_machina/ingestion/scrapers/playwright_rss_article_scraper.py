@@ -1,109 +1,121 @@
 """Playwright RSS article scraper for Hex Machina v2."""
 
+import logging
+from datetime import datetime
 from typing import Optional
 
-from playwright.async_api import async_playwright
+import scrapy
+from scrapy_playwright.page import PageMethod
 
-from ..models import ScrapedArticle
 from .rss_article_scraper import RSSArticleScraper
 
 
 class PlaywrightRSSArticleScraper(RSSArticleScraper):
-    """RSS scraper using feedparser and regular playwright."""
-
     name = "playwright_rss_article_scraper"
 
-    def __init__(self, *args, launch_args=None, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.launch_args = launch_args or ["--allow-file-access-from-files"]
-        self.logger.info(f"Playwright launch_args: {self.launch_args}")
+    def __init__(
+        self,
+        processed_limit: int = 100,
+        limit_date: Optional[datetime] = None,
+        start_urls: Optional[list] = None,
+        **kwargs,
+    ):
+        super().__init__(
+            processed_limit=processed_limit,
+            limit_date=limit_date,
+            start_urls=start_urls,
+            **kwargs,
+        )
+        self._logger = logging.getLogger(f"hex_machina.scraper.{self.name}")
 
-    async def parse_article(self, article: ScrapedArticle) -> Optional[ScrapedArticle]:
-        """Parse individual article content using playwright, with robust error handling.
+    async def parse_article(self, article) -> None:
+        """Schedule a Scrapy request to parse the article content with Playwright.
 
         Args:
-            article: Article object with RSS data already populated
-
-        Returns:
-            Enriched scraped article with content or error info
+            article (Article): The article object to be scraped.
         """
-        self.logger.debug(f"Starting Playwright scraping from {article.url}")
-        browser = None
-        async with async_playwright() as p:
-            try:
-                self.logger.debug("Launching Chromium browser")
-                browser = await p.chromium.launch(headless=True, args=self.launch_args)
-                page = await browser.new_page()
+        self.article = article
+        yield scrapy.Request(
+            url=article.url,
+            callback=self.parse,
+            errback=self.handle_error,
+            meta={
+                "scraped_article": article,
+                "playwright": True,
+                "playwright_include_page": True,
+                "playwright_page_methods": [
+                    PageMethod(
+                        "evaluate",
+                        "() => Object.defineProperty(navigator, 'webdriver', {get: () => undefined})",
+                    ),
+                    PageMethod("wait_for_timeout", 2000),
+                ],
+                "handle_httpstatus_all": True,
+            },
+        )
 
-                self.logger.debug(f"Navigating to: {article.url}")
-                response = await page.goto(article.url, wait_until="networkidle")
-                if response is None:
-                    article.ingestion_error_status = "no_response"
-                    article.ingestion_error_message = (
-                        f"No response received for {article.url}"
-                    )
-                    return article
-                status = response.status
-                if status >= 400 or status in {301, 302, 307, 308}:
-                    article.ingestion_error_status = f"http_status_{status}"
-                    article.ingestion_error_message = (
-                        f"HTTP status {status} for {article.url}"
-                    )
-                    return article
+    def handle_error(self, failure):
+        error_status = "request_error"
+        try:
+            error_message = str(failure.value)
+        except Exception:
+            error_message = str(failure)
+        response = getattr(failure, "response", None)
+        url = getattr(response, "url", None) if response else None
+        error_status = getattr(response, "status", None) if response else None
 
-                # Get raw HTML content
-                self.logger.debug("Extracting HTML content")
-                html_content = await page.content()
+        self._logger.warning(f"Error fetching {url}: {error_message}")
 
-                if not html_content:
-                    article.ingestion_error_status = "html_fetch_error"
-                    article.ingestion_error_message = (
-                        f"No HTML content retrieved from {article.url}"
-                    )
-                    return article
+        article = {
+            "title": self.article.title,
+            "url": url,
+            "source_url": self.article.source_url,
+            "url_domain": self.article.url_domain,
+            "published_date": self.article.published_date,
+            "html_content": "",
+            "text_content": "",
+            "author": self.article.author,
+            "article_metadata": self.article.article_metadata,
+            "ingestion_metadata": {
+                "scraper_name": self.name,
+            },
+            "ingestion_error_status": str(error_status),
+            "ingestion_error_message": error_message,
+        }
+        self.processed_counter += 1
+        yield article
 
-                self.logger.debug(
-                    f"Retrieved {len(html_content)} characters of HTML content"
-                )
+    def parse(self, response) -> None:
+        """Callback to process the HTTP response and extract article content.
 
-                # Parse HTML content
-                self.logger.debug("Parsing HTML content to markdown")
-                try:
-                    text_content = self.parser.parse_html(html_content)
-                except Exception as e:
-                    article.ingestion_error_status = "parsing_error"
-                    article.ingestion_error_message = str(e)
-                    return article
+        Args:
+            response: Scrapy response object.
+        """
+        if response.status != 200:
+            failure = scrapy.spidermiddlewares.httperror.HttpError(response)
+            for item in self.handle_error(failure):
+                yield item
+            return
 
-                if not text_content:
-                    article.ingestion_error_status = "parsing_error"
-                    article.ingestion_error_message = (
-                        f"No text content extracted from {article.url}"
-                    )
-                    return article
+        html_content = response.text if response.text else ""
+        scraped_article = response.meta.get("scraped_article", {})
+        text_content, error_status, error_message = self.parse_html(html_content)
+        article = {
+            "title": scraped_article.title,
+            "url": scraped_article.url,
+            "source_url": scraped_article.source_url,
+            "url_domain": scraped_article.url_domain,
+            "published_date": scraped_article.published_date,
+            "html_content": html_content,
+            "text_content": text_content,
+            "author": scraped_article.author,
+            "article_metadata": scraped_article.article_metadata,
+            "ingestion_metadata": {
+                "scraper_name": self.name,
+            },
+            "ingestion_error_status": error_status,
+            "ingestion_error_message": error_message,
+        }
 
-                self.logger.debug(
-                    f"Extracted {len(text_content)} characters of text content"
-                )
-
-                # Update article with scraped content
-                article.html_content = html_content
-                article.text_content = text_content
-
-                self.logger.debug(f"Successfully scraped article from {article.url}")
-                return article
-
-            except Exception as e:
-                article.ingestion_error_status = "connection_or_unknown_error"
-                article.ingestion_error_message = str(e)
-                self.logger.error(
-                    f"Error during Playwright scraping of {article.url}: {e}"
-                )
-                return article
-            finally:
-                if browser:
-                    try:
-                        await browser.close()
-                        self.logger.debug("Browser closed successfully")
-                    except Exception as e:
-                        self.logger.warning(f"Error closing browser: {e}")
+        self.processed_counter += 1
+        yield article

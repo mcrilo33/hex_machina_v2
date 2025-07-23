@@ -50,7 +50,7 @@ class TruncatingLogFormatter(logformatter.LogFormatter):
             Item with truncated field values
         """
         if hasattr(item, "fields"):
-            # For ScrapedArticle objects
+            # For Article objects
             truncated_item = type(item)(
                 title=getattr(item, "title", ""),
                 url=getattr(item, "url", ""),

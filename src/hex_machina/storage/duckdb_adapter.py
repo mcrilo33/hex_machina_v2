@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from .adapter import BaseDBAdapter
-from .models import Article, Base, IngestionOperation
+from .models import ArticleDB, Base, IngestionOperationDB
 
 
 class DuckDBAdapter(BaseDBAdapter):
@@ -26,8 +26,8 @@ class DuckDBAdapter(BaseDBAdapter):
     # --- IngestionOperation CRUD ---
 
     def add_ingestion_operation(
-        self, ingestion_op: IngestionOperation
-    ) -> IngestionOperation:
+        self, ingestion_op: IngestionOperationDB
+    ) -> IngestionOperationDB:
         """Add a new ingestion operation to the database."""
         with self.SessionLocal() as session:
             session.add(ingestion_op)
@@ -35,17 +35,17 @@ class DuckDBAdapter(BaseDBAdapter):
             session.refresh(ingestion_op)
             return ingestion_op
 
-    def get_ingestion_operation(self, op_id: int) -> Optional[IngestionOperation]:
+    def get_ingestion_operation(self, op_id: int) -> Optional[IngestionOperationDB]:
         """Retrieve an ingestion operation by its ID."""
         with self.SessionLocal() as session:
-            return session.get(IngestionOperation, op_id)
+            return session.get(IngestionOperationDB, op_id)
 
     def update_ingestion_operation(
-        self, ingestion_op: IngestionOperation
-    ) -> IngestionOperation:
+        self, ingestion_op: IngestionOperationDB
+    ) -> IngestionOperationDB:
         """Update an existing ingestion operation in the database."""
         with self.SessionLocal() as session:
-            db_obj = session.get(IngestionOperation, ingestion_op.id)
+            db_obj = session.get(IngestionOperationDB, ingestion_op.id)
             if db_obj is None:
                 raise ValueError(
                     f"IngestionOperation with id {ingestion_op.id} not found."
@@ -60,19 +60,19 @@ class DuckDBAdapter(BaseDBAdapter):
     def delete_ingestion_operation(self, op_id: int) -> None:
         """Delete an ingestion operation by its ID."""
         with self.SessionLocal() as session:
-            db_obj = session.get(IngestionOperation, op_id)
+            db_obj = session.get(IngestionOperationDB, op_id)
             if db_obj:
                 session.delete(db_obj)
                 session.commit()
 
-    def list_ingestion_operations(self) -> List[IngestionOperation]:
+    def list_ingestion_operations(self) -> List[IngestionOperationDB]:
         """List all ingestion operations in the database."""
         with self.SessionLocal() as session:
-            return session.query(IngestionOperation).all()
+            return session.query(IngestionOperationDB).all()
 
     # --- Article CRUD ---
 
-    def add_article(self, article: Article) -> Article:
+    def add_article(self, article: ArticleDB) -> ArticleDB:
         """Add a new article to the database."""
         with self.SessionLocal() as session:
             session.add(article)
@@ -80,15 +80,15 @@ class DuckDBAdapter(BaseDBAdapter):
             session.refresh(article)
             return article
 
-    def get_article(self, article_id: int) -> Optional[Article]:
+    def get_article(self, article_id: int) -> Optional[ArticleDB]:
         """Retrieve an article by its ID."""
         with self.SessionLocal() as session:
-            return session.get(Article, article_id)
+            return session.get(ArticleDB, article_id)
 
-    def update_article(self, article: Article) -> Article:
+    def update_article(self, article: ArticleDB) -> ArticleDB:
         """Update an existing article in the database."""
         with self.SessionLocal() as session:
-            db_obj = session.get(Article, article.id)
+            db_obj = session.get(ArticleDB, article.id)
             if db_obj is None:
                 raise ValueError(f"Article with id {article.id} not found.")
             for attr, value in vars(article).items():
@@ -101,19 +101,19 @@ class DuckDBAdapter(BaseDBAdapter):
     def delete_article(self, article_id: int) -> None:
         """Delete an article by its ID."""
         with self.SessionLocal() as session:
-            db_obj = session.get(Article, article_id)
+            db_obj = session.get(ArticleDB, article_id)
             if db_obj:
                 session.delete(db_obj)
                 session.commit()
 
-    def list_articles(self) -> List[Article]:
+    def list_articles(self) -> List[ArticleDB]:
         """List all articles in the database."""
         with self.SessionLocal() as session:
-            return session.query(Article).all()
+            return session.query(ArticleDB).all()
 
     def get_article_by_domain_and_title(
         self, url_domain: str, title: str
-    ) -> Optional[Article]:
+    ) -> Optional[ArticleDB]:
         """Retrieve an article by its url_domain and title.
 
         Args:
@@ -121,11 +121,11 @@ class DuckDBAdapter(BaseDBAdapter):
             title (str): The title of the article.
 
         Returns:
-            Optional[Article]: The ORM object if found, else None.
+            Optional[ArticleDB]: The ORM object if found, else None.
         """
         with self.SessionLocal() as session:
             return (
-                session.query(Article)
+                session.query(ArticleDB)
                 .filter_by(url_domain=url_domain, title=title)
                 .first()
             )

@@ -12,10 +12,12 @@ from scrapy.utils.project import get_project_settings
 
 from src.hex_machina.storage.duckdb_adapter import DuckDBAdapter
 from src.hex_machina.storage.manager import StorageManager
-from src.hex_machina.storage.models import IngestionOperation
+from src.hex_machina.storage.models import IngestionOperationDB
 from src.hex_machina.utils.git_utils import get_git_metadata
+from src.hex_machina.utils.json_utils import make_json_safe
 
 from ..utils import DateParser
+from .generate_ingestion_report import generate_html_ingestion_report
 from .scrapers import PlaywrightRSSArticleScraper, StealthPlaywrightRSSArticleScraper
 from .utils import get_global_settings, get_rss_feeds_by_scraper
 
@@ -55,7 +57,7 @@ class IngestionRunner:
 
             # Override with command line arguments if provided
             if self.articles_limit is None:
-                self.articles_limit = global_settings.get("articles_limit", 100)
+                self.articles_limit = global_settings.get("articles_limit")
 
             if self.date_threshold is None:
                 self.date_threshold = global_settings.get(
@@ -66,7 +68,11 @@ class IngestionRunner:
             self.limit_date = DateParser.parse_date(self.date_threshold)
 
             # Load DB path from config if present
-            self.db_path = global_settings.get("db_path", "data/hex_machina.db")
+            if "db_path" not in global_settings:
+                raise ValueError(
+                    "db_path must be set in the global settings configuration."
+                )
+            self.db_path = global_settings["db_path"]
 
             # Load RSS feeds by scraper type
             self.feeds_by_scraper = get_rss_feeds_by_scraper(self.config_path)
@@ -80,7 +86,7 @@ class IngestionRunner:
             logger.error(f"Failed to load configuration: {e}")
             raise
 
-    def run(self, verbose: bool = False) -> List:
+    def run(self, verbose: bool = False, output_dir: str = "reports/") -> List:
         """Run the ingestion process.
 
         Returns:
@@ -91,6 +97,11 @@ class IngestionRunner:
         # Initialize Scrapy settings
         settings = get_project_settings()
         settings.set("DOWNLOAD_DELAY", 1)  # Be respectful to servers
+
+        # Set CLOSESPIDER_ITEMCOUNT if articles_limit is set
+        if self.articles_limit is not None:
+            logger.info(f"Setting CLOSESPIDER_ITEMCOUNT to {self.articles_limit}")
+            settings.set("CLOSESPIDER_ITEMCOUNT", self.articles_limit)
 
         # Set Scrapy log level based on verbose flag
         if verbose:
@@ -112,6 +123,9 @@ class IngestionRunner:
         adapter = DuckDBAdapter(db_path=self.db_path)
         storage_manager = StorageManager(adapter)
         # Create an IngestionOperation record
+        scrapy_settings_dict = {
+            k: make_json_safe(settings.get(k)) for k in settings.attributes.keys()
+        }
         parameters_dict = {
             "articles_limit": self.articles_limit,
             "date_threshold": self.date_threshold,
@@ -119,7 +133,7 @@ class IngestionRunner:
             "db_path": self.db_path,
             "git": get_git_metadata(),
         }
-        ingestion_op = IngestionOperation(
+        ingestion_op = IngestionOperationDB(
             start_time=datetime.now(),
             end_time=datetime.now(),  # Will update at end
             num_articles_processed=0,  # Will update at end
@@ -134,6 +148,11 @@ class IngestionRunner:
             "ITEM_PIPELINES",
             {"src.hex_machina.ingestion.pipelines.ArticleStorePipeline": 100},
         )
+        # Enable user agent rotation via scrapy-user-agents
+        settings.set(
+            "DOWNLOADER_MIDDLEWARES",
+            {"scrapy_user_agents.middlewares.RandomUserAgentMiddleware": 400},
+        )
         settings.set("INGESTION_RUN_ID", ingestion_run_id)
         # Set GLOBAL_STORAGE_MANAGER for the pipeline
         import src.hex_machina.ingestion.pipelines as pipelines
@@ -145,15 +164,39 @@ class IngestionRunner:
 
         config = load_scraping_config(self.config_path)
         scraper_settings = config.get("scrapers", {})
-        playwright_args = scraper_settings.get("playwright", {}).get(
-            "launch_args", ["--allow-file-access-from-files"]
-        )
         stealth_playwright_args = scraper_settings.get("stealth_playwright", {}).get(
             "launch_args", ["--allow-file-access-from-files"]
         )
 
-        # Create crawler process
-        process = CrawlerProcess(settings)
+        # Enforce user_agents_type and user_agents_browser from config if present
+        scrapy_config = config.get("scrapy", {})
+        user_agents_type = scrapy_config.get("user_agents_type")
+        user_agents_browser = scrapy_config.get("user_agents_browser")
+        if user_agents_type:
+            settings.set("USER_AGENTS_TYPE", user_agents_type)
+        if user_agents_browser:
+            settings.set("USER_AGENTS_BROWSER", user_agents_browser)
+
+        # Map YAML keys to Scrapy settings names where needed
+        yaml_to_scrapy = {
+            "download_delay": "DOWNLOAD_DELAY",
+            "concurrent_requests": "CONCURRENT_REQUESTS",
+            "concurrent_requests_per_domain": "CONCURRENT_REQUESTS_PER_DOMAIN",
+            "user_agent": "USER_AGENT",
+            "robots_txt_obey": "ROBOTS_TXT_OBEY",
+            "log_level": "LOG_LEVEL",
+            "log_file": "LOG_FILE",
+            "log_stdout": "LOG_STDOUT",
+            "retry_enabled": "RETRY_ENABLED",
+            "retry_times": "RETRY_TIMES",
+            "cookies_enabled": "COOKIES_ENABLED",
+        }
+        for key, value in scrapy_config.items():
+            scrapy_key = yaml_to_scrapy.get(key, key.upper())
+            # Avoid setting user_agents_type and user_agents_browser twice
+            if scrapy_key in ("USER_AGENTS_TYPE", "USER_AGENTS_BROWSER"):
+                continue
+            settings.set(scrapy_key, value)
 
         try:
             # Process each scraper type
@@ -170,21 +213,23 @@ class IngestionRunner:
                     logger.warning(f"Unknown scraper type: {scraper_type}")
                     continue
 
+                # Create crawler process
+                process = CrawlerProcess(settings)
+
                 # Add crawler to process with parameters
                 if scraper_type == "playwright":
                     process.crawl(
                         scraper_class,
-                        start_urls=urls,
                         processed_limit=self.articles_limit,
                         limit_date=self.limit_date,
-                        launch_args=playwright_args,
+                        start_urls=urls,
                     )
                 elif scraper_type == "stealth_playwright":
                     process.crawl(
                         scraper_class,
-                        start_urls=urls,
                         processed_limit=self.articles_limit,
                         limit_date=self.limit_date,
+                        start_urls=urls,
                         launch_args=stealth_playwright_args,
                     )
                 else:
@@ -199,29 +244,33 @@ class IngestionRunner:
             process.start()
 
             logger.info("Ingestion process completed successfully")
-            # For now, return empty list since articles are logged by scrapers
-            # TODO: Implement proper item pipeline to collect articles
             # --- Update IngestionOperation at end ---
             from sqlalchemy import and_
 
-            from src.hex_machina.storage.models import Article
+            from src.hex_machina.storage.models import ArticleDB
 
             # Count articles and errors for this run
             with adapter.SessionLocal() as session:
                 num_articles = (
-                    session.query(Article)
+                    session.query(ArticleDB)
                     .filter_by(ingestion_run_id=ingestion_run_id)
                     .count()
                 )
                 num_errors = (
-                    session.query(Article)
+                    session.query(ArticleDB)
                     .filter(
                         and_(
-                            Article.ingestion_run_id == ingestion_run_id,
-                            Article.ingestion_error_status != None,
+                            ArticleDB.ingestion_run_id == ingestion_run_id,
+                            ArticleDB.ingestion_error_status != None,
                         )
                     )
                     .count()
+                )
+                # Fetch all articles for this operation
+                articles = (
+                    session.query(ArticleDB)
+                    .filter_by(ingestion_run_id=ingestion_run_id)
+                    .all()
                 )
             # Determine status
             if num_articles == 0:
@@ -238,6 +287,15 @@ class IngestionRunner:
             ingestion_op.num_errors = num_errors
             ingestion_op.status = status
             storage_manager.update_ingestion_operation(ingestion_op)
+            ingestion_op.status = status
+            storage_manager.update_ingestion_operation(ingestion_op)
+            # --- REPORT GENERATION LOGIC ---
+            output_path = generate_html_ingestion_report(
+                ingestion_op,
+                articles,
+                output_dir,
+                logger,
+            )
             return []
 
         except Exception as e:
@@ -282,6 +340,11 @@ def main():
         help="Date threshold in YYYY-MM-DD format (overrides config)",
     )
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
+    parser.add_argument(
+        "--output-dir",
+        default="reports/",
+        help="Directory to save the ingestion report (default: reports/)",
+    )
 
     args = parser.parse_args()
 
@@ -306,7 +369,7 @@ def main():
             date_threshold=args.date_threshold,
         )
 
-        runner.run(verbose=args.verbose)
+        runner.run(verbose=args.verbose, output_dir=args.output_dir)
 
     except Exception as e:
         logger.error(f"Failed to run ingestion: {e}")

@@ -58,7 +58,13 @@ try:
     # 3. Run pytest to verify the ingested data
     print("[INFO] Running pytest to verify the ingested data...")
     pytest_result = subprocess.run(
-        ["poetry", "run", "pytest", "-s", "tests/ingestion/test_ingestion_pipeline.py"],
+        [
+            "poetry",
+            "run",
+            "pytest",
+            "-s",
+            "tests/ingestion/check_ingestion_pipeline.py",
+        ],
         cwd=PROJECT_ROOT,
     )
     print(f"[INFO] Pytest exited with code {pytest_result.returncode}")

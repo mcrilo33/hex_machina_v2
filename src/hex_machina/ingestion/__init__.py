@@ -1,7 +1,7 @@
 """Ingestion module for Hex Machina v2."""
 
 from .article_parser import ArticleParser
-from .models import ScrapedArticle
+from .models import ArticleModel
 from .scrapers import (
     BaseArticleScraper,
     PlaywrightRSSArticleScraper,
@@ -16,7 +16,7 @@ from .utils import (
 )
 
 __all__ = [
-    "ScrapedArticle",
+    "ArticleModel",
     "ArticleParser",
     "BaseArticleScraper",
     "RSSArticleScraper",
