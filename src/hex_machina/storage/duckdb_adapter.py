@@ -1,11 +1,13 @@
+"""DuckDB adapter for Hex Machina v2."""
+
 import os
 from typing import List, Optional
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from .adapter import BaseDBAdapter
-from .models import ArticleDB, Base, IngestionOperationDB
+from src.hex_machina.storage.adapter import BaseDBAdapter
+from src.hex_machina.storage.models import ArticleDB, Base, IngestionOperationDB
 
 
 class DuckDBAdapter(BaseDBAdapter):
@@ -128,4 +130,37 @@ class DuckDBAdapter(BaseDBAdapter):
                 session.query(ArticleDB)
                 .filter_by(url_domain=url_domain, title=title)
                 .first()
+            )
+
+    def count_articles_for_operation(self, ingestion_run_id: int) -> int:
+        """Count the number of articles processed for a specific ingestion operation.
+
+        Args:
+            ingestion_run_id (int): The ID of the ingestion operation.
+
+        Returns:
+            int: The number of articles processed.
+        """
+        with self.SessionLocal() as session:
+            return (
+                session.query(ArticleDB)
+                .filter_by(ingestion_run_id=ingestion_run_id)
+                .count()
+            )
+
+    def count_errors_for_operation(self, ingestion_run_id: int) -> int:
+        """Count the number of articles with errors for a specific ingestion operation.
+
+        Args:
+            ingestion_run_id (int): The ID of the ingestion operation.
+
+        Returns:
+            int: The number of articles with errors.
+        """
+        with self.SessionLocal() as session:
+            return (
+                session.query(ArticleDB)
+                .filter_by(ingestion_run_id=ingestion_run_id)
+                .filter(ArticleDB.ingestion_error_status.isnot(None))
+                .count()
             )

@@ -87,7 +87,7 @@ class ArticleParser:
         Returns:
             Parsed datetime in UTC, or None if parsing fails
         """
-        from ..utils import DateParser
+        from src.hex_machina.utils import DateParser
 
         return DateParser.parse_date(raw_date)
 

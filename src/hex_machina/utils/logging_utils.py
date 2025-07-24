@@ -4,6 +4,18 @@ import logging
 import re
 
 
+def get_logger(name: str) -> logging.Logger:
+    """Get a logger instance with the given name.
+
+    Args:
+        name: Logger name (usually __name__)
+
+    Returns:
+        Logger instance
+    """
+    return logging.getLogger(name)
+
+
 class TruncatingLogFormatter(logging.Formatter):
     """Custom log formatter that truncates long field values in logs.
 

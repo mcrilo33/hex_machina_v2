@@ -1,10 +1,10 @@
 # Enhanced Scrapy Configuration for Hex Machina v2
 # This configuration demonstrates all available Scrapy settings for optimal ingestion
 
-db_path: "storage/articles.db"
-articles_limit: 10  # Limit articles per scraper
-date_threshold: "2024-07-20"  # Only articles after this date
-log_level: "INFO"
+db_path: "tests/integration/data/hex_machina_test.db"
+articles_limit: 100  # Limit articles per scraper
+date_threshold: "2024-01-01"  # Only articles after this date
+log_level: "DEBUG"
 
 scrapy:
   # Basic Settings - Stealth Focused
@@ -113,16 +113,13 @@ scrapy:
     }
 
 scrapers:
-  - scraper_0:
-    type: playwright_rss_article_scraper
+  - type: "playwright_rss_article_scraper"
     start_urls:
-      - "https://www.aws.amazon.com/rss"
+      - "tests/integration/data/test_feed_1.xml"
 
-  - scraper_1:
-    type: stealth_playwright_rss_article_scraper
+  - type: "stealth_playwright_rss_article_scraper"
     start_urls:
-      - "https://www.kdnuggets.com/feed"
-      - "https://www.techcrunch.com/feed"
+      - "tests/integration/data/test_feed_2.xml"
     browser_type: "chromium"
     headless: true  # Stealth mode makes headless less detectable
     launch_args:

@@ -1,29 +1,22 @@
-"""Ingestion module for Hex Machina v2."""
+"""Ingestion module for scraping and processing articles."""
 
-from .article_parser import ArticleParser
-from .models import ArticleModel
-from .scrapers import (
-    BaseArticleScraper,
-    PlaywrightRSSArticleScraper,
-    RSSArticleScraper,
-    StealthPlaywrightRSSArticleScraper,
+from src.hex_machina.ingestion.article_models import ArticleModel, RSSArticlePreview
+from src.hex_machina.ingestion.config_loader import load_ingestion_config
+from src.hex_machina.ingestion.config_models import IngestionConfig
+from src.hex_machina.ingestion.ingestion_report_generator import (
+    IngestionReportGenerator,
+    generate_html_ingestion_report,
 )
-from .utils import (
-    get_global_settings,
-    get_rss_feeds_by_scraper,
-    load_rss_feeds,
-    load_scraping_config,
-)
+from src.hex_machina.ingestion.ingestion_runner import IngestionRunner
+from src.hex_machina.ingestion.scrapy_pipelines import ArticleStorePipeline
 
 __all__ = [
     "ArticleModel",
-    "ArticleParser",
-    "BaseArticleScraper",
-    "RSSArticleScraper",
-    "PlaywrightRSSArticleScraper",
-    "StealthPlaywrightRSSArticleScraper",
-    "load_rss_feeds",
-    "load_scraping_config",
-    "get_global_settings",
-    "get_rss_feeds_by_scraper",
+    "RSSArticlePreview",
+    "IngestionConfig",
+    "load_ingestion_config",
+    "IngestionRunner",
+    "ArticleStorePipeline",
+    "generate_html_ingestion_report",
+    "IngestionReportGenerator",
 ]

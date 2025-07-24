@@ -1,18 +1,18 @@
 from typing import List, Optional
 
-from .adapter import BaseDBAdapter
-from .models import ArticleDB, IngestionOperationDB
+from src.hex_machina.storage.duckdb_adapter import DuckDBAdapter
+from src.hex_machina.storage.models import ArticleDB, IngestionOperationDB
 
 
 class StorageManager:
     """Main interface for storage operations, delegating to a single DB adapter.
 
     Args:
-        adapter (BaseDBAdapter): The database adapter to use (e.g., DuckDBAdapter).
+        db_path (str): Path to the database file.
     """
 
-    def __init__(self, adapter: BaseDBAdapter) -> None:
-        self._adapter = adapter
+    def __init__(self, db_path: str) -> None:
+        self._adapter = DuckDBAdapter(db_path)
 
     # --- IngestionOperation CRUD ---
 
@@ -61,3 +61,43 @@ class StorageManager:
     def list_articles(self) -> List[ArticleDB]:
         """List all articles in the database."""
         return self._adapter.list_articles()
+
+    def get_articles_for_operation(
+        self, run_id: Optional[str] = None
+    ) -> List[ArticleDB]:
+        """Get articles for a specific operation or all articles if no run_id provided.
+
+        Args:
+            run_id: Optional run ID to filter articles by operation
+
+        Returns:
+            List of articles
+        """
+        if run_id:
+            # For now, return all articles since we don't have operation filtering yet
+            # In a real implementation, you'd filter by the run_id
+            return self.list_articles()
+        else:
+            return self.list_articles()
+
+    def count_articles_for_operation(self, ingestion_run_id: int) -> int:
+        """Count the number of articles processed for a specific ingestion operation.
+
+        Args:
+            ingestion_run_id (int): The ID of the ingestion operation.
+
+        Returns:
+            int: The number of articles processed.
+        """
+        return self._adapter.count_articles_for_operation(ingestion_run_id)
+
+    def count_errors_for_operation(self, ingestion_run_id: int) -> int:
+        """Count the number of articles with errors for a specific ingestion operation.
+
+        Args:
+            ingestion_run_id (int): The ID of the ingestion operation.
+
+        Returns:
+            int: The number of articles with errors.
+        """
+        return self._adapter.count_errors_for_operation(ingestion_run_id)

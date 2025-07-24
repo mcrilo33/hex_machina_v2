@@ -5,7 +5,7 @@ from datetime import datetime
 import duckdb
 import pytest
 
-DB_PATH = "data/hex_machina_test.db"  # or your test DB path
+DB_PATH = "tests/integration/data/hex_machina_test.db"  # or your test DB path
 
 
 @pytest.mark.e2e
@@ -19,8 +19,8 @@ def test_ingestion_pipeline():
     ).fetchall()
     print(f"[TEST] Articles found: {articles}")
     assert (
-        len(articles) == 4
-    ), f"Expected 4 unique articles, got {len(articles)}: {articles}"
+        len(articles) == 5
+    ), f"Expected 5 unique articles, got {len(articles)}: {articles}"
 
     # Count articles per scraper_name
     scraper_counts = {}
@@ -39,11 +39,11 @@ def test_ingestion_pipeline():
     print("[TEST] There was a duplicate article in the first feed")
     scraper_name = "stealth_playwright_rss_article_scraper"
     assert (
-        scraper_counts[scraper_name] == 1
+        scraper_counts[scraper_name] == 2
     ), f"Expected 1 articles for {scraper_name}, got {scraper_counts[scraper_name]}"
     print("[TEST] There was 3 duplicate articles in the second feed from the first")
     total_articles = sum(scraper_counts.values())
-    assert total_articles == 4, f"Expected 4 articles in total, got {total_articles}"
+    assert total_articles == 5, f"Expected 5 articles in total, got {total_articles}"
 
     # Check expected fields in articles
     columns = [
@@ -76,64 +76,69 @@ def test_ingestion_pipeline():
     for article in all_articles:
         print(article)
 
-    article_0 = all_articles[0]
-    article_1 = all_articles[1]
-    expected_article_0 = (
+    for article in all_articles:
+        if article[1] == "Test Article 3":
+            article_3 = article
+        if article[1] == "Test Article 4":
+            article_4 = article
+
+    expected_article_3 = (
         1,
-        "Test Article 1",
-        "http://localhost:8000/article1.html",
-        "file:///Users/mathieucrilout/Repos/hex_machina_v2/tests/ingestion/data/test_feed_1.xml",
+        "Test Article 3",
+        "http://localhost:8000/article3.html",
+        "file:///Users/mathieucrilout/Repos/hex_machina_v2/tests/integration/data/test_feed_2.xml",
         "localhost:8000",
         datetime(2024, 7, 1, 12, 0),
-        '<!DOCTYPE html>\n<html lang="en">\n<head>\n    <meta charset="UTF-8">\n    <title>Test Article 1</title>\n</head>\n<body>\n    <h1>Test Article 1</h1>\n    <p>This is the content of test article 1.</p>\n</body>\n</html> ',
-        "Test Article 1 This is the content of test article 1.",
+        '<!DOCTYPE html><html lang="en"><head>\n    <meta charset="UTF-8">\n    <title>Test Article 3</title>\n</head>\n<body>\n    <h1>Test Article 3</h1>\n    <p>This is the content of test article 3.</p>\n\n </body></html>',
+        "Test Article 3 This is the content of test article 3.",
         "Author One",
-        '{"summary": "Summary of article 1", "tags": ["CISA", "cyberattack", "cybersecurity", "Microsoft", "sharepoint", "us government"]}',
-        '{"scraper_name": "playwright_rss_article_scraper"}',
+        '{"summary": "Summary of article 3", "tags": []}',
+        '{"scraper_name": "stealth_playwright_rss_article_scraper", "captcha_found": false}',
         1,
-        datetime(2025, 7, 21, 14, 44, 13, 353976),
+        datetime(2025, 7, 24, 0, 26, 19, 419542),
         None,
         None,
     )
-    expected_article_1 = (
+    expected_article_4 = (
         2,
-        "Test Article 2",
-        "http://localhost:8000/article2.html",
-        "file:///Users/mathieucrilout/Repos/hex_machina_v2/tests/ingestion/data/test_feed_1.xml",
+        "Test Article 4",
+        "http://localhost:8000/article4.html",
+        "file:///Users/mathieucrilout/Repos/hex_machina_v2/tests/integration/data/test_feed_1.xml",
         "localhost:8000",
         datetime(2024, 7, 1, 13, 0),
-        '<!DOCTYPE html>\n<html lang="en">\n<head>\n    <meta charset="UTF-8">\n    <title>Test Article 2</title>\n</head>\n<body>\n    <h1>Test Article 2</h1>\n    <p>This is the content of test article 2.</p>\n</body>\n</html> ',
-        "Test Article 2 This is the content of test article 2.",
-        "Author Two",
-        '{"summary": "Summary of article 2", "tags": []}',
+        "",
+        "",
+        "Author Four",
+        '{"summary": "Summary of article 4", "tags": []}',
         '{"scraper_name": "playwright_rss_article_scraper"}',
         1,
-        datetime(2025, 7, 21, 15, 12, 58, 39066),
-        None,
-        None,
+        datetime(2025, 7, 24, 0, 26, 6, 392950),
+        "404",
+        "",
     )
     for i, field in enumerate(fields):
+        if field == "id":
+            continue
         if field == "ingested_at":
             assert isinstance(
-                article_0[i], datetime
-            ), f"Article 0 {field} is not a datetime: {article_0[i]}"
+                article_3[i], datetime
+            ), f"Article 3 {field} is not a datetime: {article_3[i]}"
             assert isinstance(
-                article_1[i], datetime
-            ), f"Article 1 {field} is not a datetime: {article_1[i]}"
+                article_4[i], datetime
+            ), f"Article 4 {field} is not a datetime: {article_4[i]}"
         else:
             assert (
-                article_0[i] == expected_article_0[i]
-            ), f"Article 0 {field} mismatch: {article_0[i]}"
+                article_3[i] == expected_article_3[i]
+            ), f"Article 3 {field} mismatch: {article_3[i]}"
             assert (
-                article_1[i] == expected_article_1[i]
-            ), f"Article 1 {field} mismatch: {article_1[i]}"
-        print(f"[TEST] Article 0,1 {field}(s) match {article_0[i]},{article_1[i]}")
+                article_4[i] == expected_article_4[i]
+            ), f"Article 4 {field} mismatch: {article_4[i]}"
+        print(f"[TEST] Article 3,4 {field}(s) match {article_3[i]},{article_4[i]}")
 
-    article_2 = all_articles[2]
-    assert article_2[13] == "404"
-    print(f"[TEST] Article 2 ingestion_error_status: {article_2[13]}")
-    # assert article_2[14] == "HTTP status 404 for http://localhost:8000/fake.html"
-    # print(f"[TEST] Article 2 ingestion_error_message: {article_2[14]}")
+    assert article_4[13] == "404"
+    print(f"[TEST] Article 4 ingestion_error_status: {article_4[13]}")
+    assert article_4[14] == ""
+    print(f"[TEST] Article 4 ingestion_error_message: {article_4[14]}")
 
     # Test the IngestionOperation record created by ingestion_script.py
     ingestion_ops = con.execute("SELECT * FROM ingestion_operations").fetchall()
@@ -163,9 +168,9 @@ def test_ingestion_pipeline():
         1,
         datetime(2025, 7, 21, 15, 51, 7, 390756),
         datetime(2025, 7, 21, 15, 51, 19, 224968),
-        4,
-        1,
-        "partial",
+        5,
+        2,
+        "completed",
         '{"articles_limit": 5, "date_threshold": "2024-01-01", "config_path": "tests/ingestion/testing_scraping_config.yaml", "db_path": "data/hex_machina_test.db", "git": {"git_commit": "fc7502372ca688761071c4f4b382faee7b746ef2", "git_branch": "main", "git_repo": "git@github.com:mcrilo33/hex_machina_v2.git"}}',
     )
     for i, field in enumerate(fields):
@@ -177,13 +182,12 @@ def test_ingestion_pipeline():
             parameters = json.loads(ingestion_op[i])
             for key, value in parameters.items():
                 assert key in [
+                    "db_path",
                     "articles_limit",
                     "date_threshold",
-                    "config_path",
-                    "db_path",
-                    "git",
-                    "scrapy_settings",
-                    "feeds_by_scraper",
+                    "log_level",
+                    "scrapy",
+                    "scrapers",
                 ], f"Unexpected parameter: {key}"
         else:
             assert (

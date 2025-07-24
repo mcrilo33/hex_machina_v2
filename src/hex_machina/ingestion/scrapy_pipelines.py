@@ -2,7 +2,7 @@ import json
 from datetime import datetime
 from typing import Any
 
-from src.hex_machina.ingestion.models import ArticleModel
+from src.hex_machina.ingestion.article_models import ArticleModel
 from src.hex_machina.storage.manager import StorageManager
 from src.hex_machina.storage.models import ArticleDB
 
@@ -19,7 +19,7 @@ class ArticleStorePipeline:
 
     @classmethod
     def from_crawler(cls, crawler):
-        from src.hex_machina.ingestion.pipelines import GLOBAL_STORAGE_MANAGER
+        from src.hex_machina.ingestion.scrapy_pipelines import GLOBAL_STORAGE_MANAGER
 
         ingestion_run_id = crawler.settings.get("INGESTION_RUN_ID")
         if GLOBAL_STORAGE_MANAGER is None or ingestion_run_id is None:

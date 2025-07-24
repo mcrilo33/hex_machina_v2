@@ -1,13 +1,16 @@
 import os
+import shutil
 import signal
 import subprocess
 import time
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DATA_DIR = PROJECT_ROOT / "tests" / "ingestion" / "data"
-FEED_PATH = DATA_DIR / "test_feed.xml"
+INTEGRATION_DIR = Path(__file__).parent
+DATA_DIR = INTEGRATION_DIR / "data"
+FEED_PATH = DATA_DIR / "test_feed_1.xml"
 BACKUP_PATH = FEED_PATH.with_suffix(".xml.bak")
+OUTPUT_DIR = INTEGRATION_DIR / "last_test_e2e_report"
 HTTP_BASE = "http://localhost:8000/"
 
 # 0. Ensure port 8000 is free
@@ -25,10 +28,13 @@ except Exception as e:
     print(f"[WARN] Could not check/kill process on port 8000: {e}")
 
 # Clean up: delete the test DB
-db_path = PROJECT_ROOT / "data" / "hex_machina_test.db"
-if db_path.exists():
-    print(f"[INFO] Deleting test DB: {db_path}")
-    db_path.unlink()
+DB_PATH = PROJECT_ROOT / "tests" / "integration" / "data" / "hex_machina_test.db"
+if DB_PATH.exists():
+    print(f"[INFO] Deleting test DB: {DB_PATH}")
+    DB_PATH.unlink()
+if OUTPUT_DIR.exists():
+    print(f"[INFO] Deleting output directory: {OUTPUT_DIR}")
+    shutil.rmtree(OUTPUT_DIR)
 print("[INFO] Done.")
 
 # 1. Start the HTTP server in the background
@@ -39,7 +45,7 @@ time.sleep(1)  # Give the server a moment to start
 
 try:
     # 2. Run the ingestion pipeline with the test config
-    print("[INFO] Running ingestion pipeline with testing_scraping_config.yaml...")
+    print("[INFO] Running ingestion pipeline with integration_scraping_config.yaml...")
     result = subprocess.run(
         [
             "poetry",
@@ -48,8 +54,9 @@ try:
             "-m",
             "src.hex_machina.ingestion.ingestion_script",
             "--config",
-            "tests/ingestion/testing_scraping_config.yaml",
-            "--verbose",
+            str(INTEGRATION_DIR / "integration_scraping_config.yaml"),
+            "--output-dir",
+            str(OUTPUT_DIR),
         ],
         cwd=PROJECT_ROOT,
     )
@@ -63,7 +70,7 @@ try:
             "run",
             "pytest",
             "-s",
-            "tests/ingestion/check_ingestion_pipeline.py",
+            str(PROJECT_ROOT / "tests" / "ingestion" / "check_ingestion_pipeline.py"),
         ],
         cwd=PROJECT_ROOT,
     )
@@ -77,8 +84,7 @@ finally:
     except subprocess.TimeoutExpired:
         server_proc.kill()
     # Clean up: delete the test DB
-    db_path = PROJECT_ROOT / "data" / "hex_machina_test.db"
-    if db_path.exists():
-        print(f"[INFO] Deleting test DB: {db_path}")
-        db_path.unlink()
+    if DB_PATH.exists():
+        print(f"[INFO] Deleting test DB: {DB_PATH}")
+        DB_PATH.unlink()
     print("[INFO] Done.")

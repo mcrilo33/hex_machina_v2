@@ -1,14 +1,12 @@
 """Hex Machina v2 - AI-driven newsletter service."""
 
-from .ingestion import (
+from src.hex_machina.ingestion import (
     ArticleModel,
-    ArticleParser,
-    BaseArticleScraper,
-    PlaywrightRSSArticleScraper,
-    RSSArticleScraper,
-    StealthPlaywrightRSSArticleScraper,
+    IngestionConfig,
+    IngestionRunner,
+    generate_html_ingestion_report,
 )
-from .utils import DateParser
+from src.hex_machina.utils.date_parser import DateParser
 
 __version__ = "0.1.0"
 __author__ = "Mathieu Crilout"
@@ -16,10 +14,8 @@ __email__ = "mathieu.crilout@gmail.com"
 
 __all__ = [
     "ArticleModel",
-    "ArticleParser",
-    "BaseArticleScraper",
-    "RSSArticleScraper",
-    "PlaywrightRSSArticleScraper",
-    "StealthPlaywrightRSSArticleScraper",
+    "IngestionConfig",
+    "IngestionRunner",
+    "generate_html_ingestion_report",
     "DateParser",
 ]

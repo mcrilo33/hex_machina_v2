@@ -1,7 +1,9 @@
+"""Base database adapter for Hex Machina v2."""
+
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
-from .models import ArticleDB, IngestionOperationDB
+from src.hex_machina.storage.models import ArticleDB, IngestionOperationDB
 
 
 class BaseDBAdapter(ABC):

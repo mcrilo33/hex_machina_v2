@@ -1,12 +1,15 @@
 """Stealth Playwright RSS article scraper for Hex Machina v2."""
 
-import logging
 import random
+from datetime import datetime
+from typing import AsyncGenerator, Optional
 
-from playwright.async_api import async_playwright
-from playwright_stealth import stealth_sync
+from playwright.async_api import BrowserContext, Page, async_playwright
+from playwright_stealth import stealth_async
 
-from .rss_article_scraper import RSSArticleScraper
+from src.hex_machina.ingestion.article_models import ArticleModel
+from src.hex_machina.ingestion.scrapers.rss_article_scraper import RSSArticleScraper
+from src.hex_machina.utils.logging_utils import get_logger
 
 # Pool of realistic desktop user agents (expand as needed)
 USER_AGENT_POOL = [
@@ -18,106 +21,147 @@ USER_AGENT_POOL = [
 
 
 class StealthPlaywrightRSSArticleScraper(RSSArticleScraper):
-    """RSS scraper using feedparser and playwright-stealth."""
+    """RSS scraper using feedparser and playwright-stealth with advanced anti-bot features."""
 
     name = "stealth_playwright_rss_article_scraper"
 
-    def __init__(self, *args, launch_args=None, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._logger = logging.getLogger(f"hex_machina.scraper.{self.name}")
-        config = self.scraper_config
-        self.browser_type = config.get("browser_type", "chromium")
-        self.headless = config.get("headless", True)
-        self.launch_args = config.get("launch_args", ["--allow-file-access-from-files"])
-        self.wait_until = config.get("wait_until", "networkidle")
-        # Randomize viewport for each instance
-        self.viewport = config.get("viewport") or {
-            "width": random.randint(1200, 1920),
-            "height": random.randint(700, 1080),
-        }
-        self.java_script_enabled = config.get("java_script_enabled", True)
-        self.ignore_https_errors = config.get("ignore_https_errors", True)
-        self.screenshot_on_error = config.get("screenshot_on_error", True)
-        # Add realistic HTTP headers if not set
-        default_headers = {
-            "Accept-Language": "en-US,en;q=0.9",
-            "Referer": "https://www.google.com/",
-            "Connection": "keep-alive",
-        }
-        self.extra_http_headers = {
-            **default_headers,
-            **config.get("extra_http_headers", {}),
-        }
-        self.enable_stealth = config.get("enable_stealth", True)
-        self.stealth_options = config.get("stealth_options", {})
-        # Set locale and timezone for context
-        self.locale = config.get("locale", "en-US")
-        self.timezone_id = config.get("timezone_id", "America/New_York")
-        self._logger.info(f"Stealth Playwright config: {config}")
+    def __init__(
+        self,
+        scraper_config: dict,
+        start_urls: Optional[list] = None,
+        **kwargs,
+    ) -> None:
+        super().__init__(
+            scraper_config=scraper_config,
+            start_urls=start_urls,
+            **kwargs,
+        )
+        self._logger = get_logger(f"hex_machina.scraper.{self.name}")
+        self.browser_type = self.scraper_config.get("browser_type", "chromium")
+        self.headless = self.scraper_config.get("headless", True)
+        self.launch_args = self.scraper_config.get(
+            "launch_args", ["--allow-file-access-from-files"]
+        )
+        self.proxy = self.scraper_config.get("proxy")
+        self.max_retries = self.scraper_config.get("max_retries", 2)
+        self.screenshot_on_error = self.scraper_config.get("screenshot_on_error", True)
+        self.captcha_found = False
+        self._logger.info(f"Stealth Playwright config: {self.scraper_config}")
 
-    async def parse_article(self, article) -> None:
-        """Async generator to scrape an article using Playwright stealth and yield a result dict.
+    async def parse_article(
+        self, article: ArticleModel
+    ) -> AsyncGenerator[ArticleModel, None]:
+        """Async generator to scrape an article using Playwright stealth and yield an ArticleModel.
 
         Args:
-            article: Article object with RSS data already populated
-
+            article: ArticleModel with RSS data already populated
         Yields:
-            dict: Article dict with all required fields and error info if applicable
+            ArticleModel with all required fields and error info if applicable
         """
         error_status = None
         error_message = None
         html_content = ""
-        try:
-            async with async_playwright() as p:
-                user_agent = self.scraper_config.get("user_agent") or random.choice(
-                    USER_AGENT_POOL
-                )
-                browser = await p.chromium.launch(
-                    headless=self.headless, args=self.launch_args
-                )
-                context = await browser.new_context(
-                    user_agent=user_agent,
-                    locale=self.locale,
-                    timezone_id=self.timezone_id,
-                    viewport=self.viewport,
-                    device_scale_factor=1,
-                    has_touch=False,
-                    is_mobile=False,
-                    java_script_enabled=self.java_script_enabled,
-                    ignore_https_errors=self.ignore_https_errors,
-                    extra_http_headers=self.extra_http_headers,
-                )
-                page = await context.new_page()
-                # Stealth patch (sync, but safe to call)
-                stealth_sync(page)
-                await page.goto(article.url, timeout=60000, wait_until=self.wait_until)
-                await page.wait_for_timeout(3000)
-                html_content = await page.content()
-                await browser.close()
-                text_content, error_status, error_message = self.parse_html(
-                    html_content
-                )
-        except Exception as e:
-            self._logger.warning(
-                f"Stealth Playwright failed for {getattr(article, 'url', None)}: {e}"
-            )
-            error_status = "stealth_playwright_error"
-            error_message = str(e)
-
-        result = {
-            "title": article.title,
-            "url": article.url,
-            "source_url": article.source_url,
-            "url_domain": article.url_domain,
-            "published_date": article.published_date,
-            "html_content": html_content,
-            "text_content": text_content,
-            "author": getattr(article, "author", None),
-            "article_metadata": getattr(article, "article_metadata", {}),
-            "ingestion_metadata": {
-                "scraper_name": self.name,
-            },
-            "ingestion_error_status": error_status,
-            "ingestion_error_message": error_message,
+        text_content = ""
+        # Standardized context options
+        viewport = {
+            "width": random.randint(1200, 1920),
+            "height": random.randint(700, 1080),
         }
-        yield result
+        locale = "en-US"
+        timezone_id = "America/New_York"
+        extra_http_headers = {
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "https://www.google.com/",
+            "Connection": "keep-alive",
+        }
+        device_scale_factor = 1
+        has_touch = False
+        is_mobile = False
+        java_script_enabled = True
+        ignore_https_errors = True
+        wait_until = "networkidle"
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                async with async_playwright() as p:
+                    user_agent = self.scraper_config.get("user_agent") or random.choice(
+                        USER_AGENT_POOL
+                    )
+                    browser = await getattr(p, self.browser_type).launch(
+                        headless=self.headless, args=self.launch_args
+                    )
+                    context_args = dict(
+                        user_agent=user_agent,
+                        locale=locale,
+                        timezone_id=timezone_id,
+                        viewport=viewport,
+                        device_scale_factor=device_scale_factor,
+                        has_touch=has_touch,
+                        is_mobile=is_mobile,
+                        java_script_enabled=java_script_enabled,
+                        ignore_https_errors=ignore_https_errors,
+                        extra_http_headers=extra_http_headers,
+                    )
+                    if self.proxy:
+                        context_args["proxy"] = self.proxy
+                    context: BrowserContext = await browser.new_context(**context_args)
+                    page: Page = await context.new_page()
+                    # Stealth patch (async)
+                    await stealth_async(page)
+                    # Block images, fonts, media
+                    await page.route(
+                        "**/*",
+                        lambda route, request: (
+                            route.abort()
+                            if request.resource_type in ["image", "media", "font"]
+                            else route.continue_()
+                        ),
+                    )
+                    # Human-like actions
+                    mouse_x = random.randint(0, 800)
+                    mouse_y = random.randint(0, 600)
+                    wheel_delta = random.randint(100, 1000)
+                    await page.mouse.move(mouse_x, mouse_y)
+                    await page.mouse.wheel(0, wheel_delta)
+                    await page.keyboard.press("PageDown")
+                    # Go to page
+                    await page.goto(article.url, timeout=60000, wait_until=wait_until)
+                    await page.wait_for_timeout(random.randint(1000, 3000))
+                    html_content = await page.content()
+                    # Captcha detection
+                    self.captcha_found = (
+                        await page.query_selector(
+                            'iframe[src*="captcha"], .g-recaptcha, [id*="captcha"], [class*="captcha"]'
+                        )
+                        is not None
+                    )
+                    if self.captcha_found:
+                        self._logger.warning(f"CAPTCHA detected on {article.url}")
+                    await browser.close()
+                    text_content, error_status, error_message = self.parse_html(
+                        html_content
+                    )
+                    break  # Success, exit retry loop
+            except Exception as e:
+                self._logger.warning(
+                    f"Stealth Playwright failed for {getattr(article, 'url', None)} (attempt {attempt}): {e}"
+                )
+                error_status = "stealth_playwright_error"
+                error_message = str(e)
+                if self.screenshot_on_error and "page" in locals():
+                    try:
+                        await page.screenshot(
+                            path=f"error_{self.name}_{int(datetime.now().timestamp())}.png"
+                        )
+                    except Exception as se:
+                        self._logger.warning(f"Screenshot on error failed: {se}")
+                if attempt == self.max_retries:
+                    break
+        article.html_content = html_content
+        article.text_content = text_content
+        article.ingestion_error_status = error_status
+        article.ingestion_error_message = error_message
+        article.ingestion_metadata = {
+            "scraper_name": self.name,
+            "captcha_found": self.captcha_found,
+        }
+        yield article
