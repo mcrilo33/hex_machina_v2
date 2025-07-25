@@ -197,3 +197,4 @@ cursor-watchful-headers/
 .watchlist
 .cursorrules
 watcher.py
+migration/previous_db/hex_tinydb.json

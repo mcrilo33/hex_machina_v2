@@ -2,6 +2,7 @@
 
 import re
 from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from typing import Optional, Union
 
 
@@ -35,22 +36,13 @@ class DateParser:
             date_input: Date string, datetime object, or None
 
         Returns:
-            Parsed datetime object in UTC timezone, or None if parsing fails
-
-        Examples:
-            >>> DateParser.parse_date("2024-01-15T10:30:00Z")
-            datetime.datetime(2024, 1, 15, 10, 30, tzinfo=timezone.utc)
-
-            >>> DateParser.parse_date("Mon, 15 Jan 2024 10:30:00 +0000")
-            datetime.datetime(2024, 1, 15, 10, 30, tzinfo=timezone.utc)
-
-            >>> DateParser.parse_date("2024-01-15")
-            datetime.datetime(2024, 1, 15, 0, 0, tzinfo=timezone.utc)
+            Parsed datetime object in UTC timezone (timezone-aware). If no timezone info is present, defaults to UTC (GMT).
+            Returns None if parsing fails.
         """
         if date_input is None:
             return None
 
-        # If already a datetime object, ensure it's in UTC
+        # If already a datetime object, ensure it's in UTC and timezone-aware
         if isinstance(date_input, datetime):
             return cls._ensure_utc(date_input)
 
@@ -64,12 +56,20 @@ class DateParser:
         # Try our custom format parsing
         parsed_date = cls._parse_custom_formats(date_str)
         if parsed_date:
-            return parsed_date
+            return cls._ensure_utc(parsed_date)
 
         # Try to extract date from common patterns
         parsed_date = cls._extract_date_patterns(date_str)
         if parsed_date:
-            return parsed_date
+            return cls._ensure_utc(parsed_date)
+
+        # Fallback: try email.utils.parsedate_to_datetime for RFC 2822/822
+        try:
+            parsed = parsedate_to_datetime(date_str)
+            if parsed:
+                return cls._ensure_utc(parsed)
+        except Exception:
+            pass
 
         return None
 
@@ -197,14 +197,11 @@ class DateParser:
 
     @classmethod
     def _ensure_utc(cls, dt: datetime) -> datetime:
-        """Ensure datetime is in UTC timezone."""
+        """Ensure datetime is timezone-aware and in UTC timezone. If naive, set to UTC (GMT)."""
         if dt.tzinfo is None:
-            # Assume local timezone if none specified
             dt = dt.replace(tzinfo=timezone.utc)
         elif dt.tzinfo != timezone.utc:
-            # Convert to UTC
             dt = dt.astimezone(timezone.utc)
-
         return dt
 
     @classmethod

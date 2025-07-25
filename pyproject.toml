@@ -38,6 +38,7 @@ pathspec = "^0.12.1"
 griffe = ">=0.20.0,<1.0.0"
 markdown2 = "^2.5.3"
 scrapy-playwright = "^0.0.43"
+tinydb = "^4.8.2"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.2"
@@ -49,6 +50,7 @@ pytest-cov = "^6.2.1"
 coverage = "^7.9.2"
 scrapy-user-agents = "^0.1.1"
 pytest-asyncio = "^1.1.0"
+tinydb = "^4.8.2"
 
 
 

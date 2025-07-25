@@ -1,7 +1,7 @@
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, Sequence, String, Text
-from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.orm import relationship
 
-Base = declarative_base()
+from src.hex_machina.storage.base import Base
 
 
 class IngestionOperationDB(Base):
@@ -55,6 +55,7 @@ class ArticleDB(Base):
         ingested_at (datetime): Timestamp when the article was ingested.
         ingestion_error_status (str): Error status if ingestion failed (optional).
         ingestion_error_message (str): Error message if ingestion failed (optional).
+        enrichments (list[Enrichment]): All enrichment results for this article.
     """
 
     __tablename__ = "articles"
@@ -89,4 +90,8 @@ class ArticleDB(Base):
 
     ingestion_operation = relationship(
         "IngestionOperationDB", back_populates="articles"
+    )
+
+    enrichments = relationship(
+        "EnrichmentDB", back_populates="article", cascade="all, delete-orphan"
     )

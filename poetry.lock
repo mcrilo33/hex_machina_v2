@@ -3463,6 +3463,18 @@ doc = ["reno", "sphinx"]
 test = ["pytest", "tornado (>=4.5)", "typeguard"]
 
 [[package]]
+name = "tinydb"
+version = "4.8.2"
+description = "TinyDB is a tiny, document oriented database optimized for your happiness :)"
+optional = false
+python-versions = "<4.0,>=3.8"
+groups = ["main", "dev"]
+files = [
+    {file = "tinydb-4.8.2-py3-none-any.whl", hash = "sha256:f97030ee5cbc91eeadd1d7af07ab0e48ceb04aa63d4a983adbaca4cba16e86c3"},
+    {file = "tinydb-4.8.2.tar.gz", hash = "sha256:f7dfc39b8d7fda7a1ca62a8dbb449ffd340a117c1206b68c50b1a481fb95181d"},
+]
+
+[[package]]
 name = "tld"
 version = "0.13.1"
 description = "Extract the top-level domain (TLD) from the URL given."
@@ -3865,4 +3877,4 @@ testing = ["coverage[toml]", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.10"
-content-hash = "45c402f595cfd491cf801dd956bfc6e827ddb4d588939b4d6d3f3d2490bf66a1"
+content-hash = "435d604428d0f512848714fce65be39ab6c46f1537d9028e2b7177668f962d62"
