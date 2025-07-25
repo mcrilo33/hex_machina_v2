@@ -12,6 +12,20 @@ try:
 except ImportError:
     MAIN_CONTENT_EXTRACTOR_AVAILABLE = False
 
+try:
+    import trafilatura
+
+    TRAFILATURA_AVAILABLE = True
+except ImportError:
+    TRAFILATURA_AVAILABLE = False
+
+try:
+    from readability import Document
+
+    READABILITY_AVAILABLE = True
+except ImportError:
+    READABILITY_AVAILABLE = False
+
 
 class ArticleParser:
     """Parser for cleaning and extracting article data."""
@@ -136,8 +150,8 @@ class ArticleParser:
             return ""
 
         try:
-            # Remove URLs
-            text = re.sub(r"(https?:\/\/|www\.)([\w\.\/-]+)", "", text)
+            # Remove URLs but preserve surrounding spaces
+            text = re.sub(r"\s*(https?:\/\/|www\.)([\w\.\/-]+)\s*", " ", text)
 
             # Remove images but preserve alt text if present
             text = re.sub(r"!\[([^\]]*?)\]\(.*?\)", r"\1", text, flags=re.DOTALL)
@@ -148,26 +162,35 @@ class ArticleParser:
             # Fix dashes separated by line breaks (e.g., "-\nword" → "-word")
             text = re.sub(r"(-)\n(\w)", r"\1\2", text)
 
-            # Merge broken lines that are not paragraph breaks
-            text = re.sub(r"(\S)\n(?=\S)", r"\1 ", text)
+            # Fix markdown bullet lists - preserve the asterisk and proper formatting
+            # Use MULTILINE flag to match start of lines
+            text = re.sub(r"^(\s*)\*(\s*)", r"\1* ", text, flags=re.MULTILINE)
 
-            # Fix markdown bullet lists
-            text = re.sub(r"\s*\*\s*", r"\n* ", text)
-
-            # Fix markdown numbered lists
-            text = re.sub(r" +(\d+\.) +", r"\n\1 ", text)
+            # Fix markdown numbered lists - preserve the numbering and proper formatting
+            text = re.sub(r"^(\s*)(\d+\.)(\s*)", r"\1\2 ", text, flags=re.MULTILINE)
 
             # Remove HTML tags
             text = re.sub(r"<[^>]+>", "", text)
 
-            # Remove Non-breaking space and other HTML entities
-            text = re.sub(r"&nbsp;|&amp;|&lt;|&gt;|&quot;|&#39;", "", text)
+            # Decode HTML entities properly
+            text = re.sub(r"&nbsp;", " ", text)  # Replace &nbsp; with space
+            text = re.sub(r"&amp;", "&", text)  # Replace &amp; with &
+            text = re.sub(r"&lt;", "<", text)  # Replace &lt; with <
+            text = re.sub(r"&gt;", ">", text)  # Replace &gt; with >
+            text = re.sub(r"&quot;", '"', text)  # Replace &quot; with "
+            text = re.sub(r"&#39;", "'", text)  # Replace &#39; with '
 
-            # Remove lines full of [ \*#\n]
-            text = re.sub(r"\n[ \*#\n]*", r"\n", text, flags=re.DOTALL)
+            # Remove lines that are only whitespace, asterisks, or hash symbols
+            # But be more careful - only remove if the line is truly empty of content
+            text = re.sub(
+                r"\n[ \t]*\*[ \t]*\n", "\n", text
+            )  # Remove lines with just asterisks
+            text = re.sub(
+                r"\n[ \t]*#[ \t]*\n", "\n", text
+            )  # Remove lines with just hash symbols
 
             # Normalize whitespace and line breaks
-            text = re.sub(r"\n{2,}", "\n", text)  # Collapse multiple newlines
+            text = re.sub(r"\n{3,}", "\n\n", text)  # Collapse 3+ newlines to 2
             text = re.sub(r"[ \t]+", " ", text)  # Collapse multiple spaces/tabs
 
             return text.strip()
@@ -186,26 +209,56 @@ class ArticleParser:
             Extracted markdown content
 
         Raises:
-            ImportError: If MainContentExtractor is not available
+            ImportError: If no content extraction library is available
         """
         if not html:
             return ""
 
-        if not MAIN_CONTENT_EXTRACTOR_AVAILABLE:
+        # Try Trafilatura first (best overall)
+        if TRAFILATURA_AVAILABLE:
+            try:
+                extracted = trafilatura.extract(
+                    html, include_formatting=True, include_links=True
+                )
+                if extracted:
+                    return self._clean_markdown(extracted)
+            except Exception:
+                pass
+
+        # Try Readability as fallback
+        if READABILITY_AVAILABLE:
+            try:
+                doc = Document(html)
+                extracted = doc.summary()
+                if extracted:
+                    return self._clean_markdown(extracted)
+            except Exception:
+                pass
+
+        # Try MainContentExtractor as last resort
+        if MAIN_CONTENT_EXTRACTOR_AVAILABLE:
+            try:
+                extracted = MainContentExtractor.extract(html, output_format="markdown")
+                if extracted:
+                    return self._clean_markdown(extracted)
+            except Exception:
+                pass
+
+        # If no extraction library is available
+        if not any(
+            [
+                TRAFILATURA_AVAILABLE,
+                READABILITY_AVAILABLE,
+                MAIN_CONTENT_EXTRACTOR_AVAILABLE,
+            ]
+        ):
             raise ImportError(
-                "MainContentExtractor is required for HTML content extraction. "
-                "Please install it or provide your own implementation."
+                "No content extraction library available. Please install one of: "
+                "trafilatura, readability-lxml, or MainContentExtractor"
             )
 
-        try:
-            # Use MainContentExtractor for content extraction
-            extracted = MainContentExtractor.extract(html, output_format="markdown")
-            if extracted:
-                return self._clean_markdown(extracted)
-            return ""
-
-        except Exception as e:
-            raise RuntimeError(f"Failed to extract content from HTML: {e}")
+        # Fallback: basic HTML cleaning
+        return self._clean_markdown(html)
 
     def parse_html(self, raw_html: str) -> str:
         """Parse and clean HTML content, extracting main content as markdown.

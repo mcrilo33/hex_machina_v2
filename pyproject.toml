@@ -39,6 +39,10 @@ griffe = ">=0.20.0,<1.0.0"
 markdown2 = "^2.5.3"
 scrapy-playwright = "^0.0.43"
 tinydb = "^4.8.2"
+rich = "^14.1.0"
+trafilatura = "^2.0.0"
+readability-lxml = "^0.8.4.1"
+ipdb = "^0.13.13"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.2"

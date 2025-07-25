@@ -165,7 +165,7 @@ class IngestionDomainEvaluationReportGenerator(BaseReportGenerator):
             ratio = text_length / html_length if html_length > 0 else 0
 
             # Filter out articles with text_content length over 20000
-            if ratio > 0.05 or text_length > 5000:
+            if ratio > 0.05 or text_length > 5000 or html_length > 50000:
                 continue
 
             html_lengths.append(html_length)

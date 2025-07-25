@@ -33,6 +33,15 @@ class IngestionEvaluationReportGenerator(BaseReportGenerator):
             IngestionEvaluationReportGenerator._section_content_length_distributions(
                 self, articles, report_dir
             ),
+            IngestionEvaluationReportGenerator._section_short_html_by_domain(
+                self, articles, report_dir
+            ),
+            IngestionEvaluationReportGenerator._section_short_text_by_domain(
+                self, articles, report_dir
+            ),
+            IngestionEvaluationReportGenerator._section_low_text_html_ratio_by_domain(
+                self, articles, report_dir
+            ),
         ]
         return sections
 
@@ -136,7 +145,7 @@ class IngestionEvaluationReportGenerator(BaseReportGenerator):
             ratio = text_length / html_length if html_length > 0 else 0
 
             # Filter out articles with text_content length over 20000
-            if ratio > 0.05 or text_length > 5000:
+            if ratio > 0.05 or text_length > 5000 or html_length > 50000:
                 continue
 
             html_lengths.append(html_length)
@@ -299,6 +308,262 @@ class IngestionEvaluationReportGenerator(BaseReportGenerator):
             section += f"- Mean: {ratio_stats['mean'] * 100:.1f}%\n"
             section += f"- Median: {ratio_stats['median'] * 100:.1f}%\n"
             section += f"- Range: {ratio_stats['min'] * 100:.1f}% - {ratio_stats['max'] * 100:.1f}%\n\n"
+        return section
+
+    @staticmethod
+    def _section_short_html_by_domain(
+        self, articles: List[Any], report_dir: Path
+    ) -> str:
+        """Create a bar plot showing percentage of articles with HTML content < 5000 by domain."""
+        if not articles:
+            return "## Short HTML Content by Domain\n\nNo articles found.\n\n"
+
+        # Filter for error-free articles
+        error_free_articles = [
+            a for a in articles if not getattr(a, "ingestion_error_status", None)
+        ]
+        if not error_free_articles:
+            return (
+                "## Short HTML Content by Domain\n\nNo error-free articles found.\n\n"
+            )
+
+        # Count total articles by domain
+        total_domain_counts = {}
+        for article in error_free_articles:
+            domain = getattr(article, "url_domain", "Unknown")
+            total_domain_counts[domain] = total_domain_counts.get(domain, 0) + 1
+
+        # Filter for error-free articles with HTML content < 5000
+        short_html_articles = [
+            a for a in error_free_articles if len(getattr(a, "html_content", "")) < 5000
+        ]
+        if not short_html_articles:
+            return "## Short HTML Content by Domain\n\nNo articles with HTML content < 5000 found.\n\n"
+
+        # Count short HTML articles by domain and calculate percentages
+        domain_percentages = {}
+        for article in short_html_articles:
+            domain = getattr(article, "url_domain", "Unknown")
+            domain_percentages[domain] = domain_percentages.get(domain, 0) + 1
+        for domain in domain_percentages:
+            total_articles = total_domain_counts.get(domain, 0)
+            if total_articles > 0:
+                domain_percentages[domain] = (
+                    domain_percentages[domain] / total_articles
+                ) * 100
+
+        # Sort by percentage descending
+        sorted_domains = sorted(
+            domain_percentages.items(), key=lambda x: x[1], reverse=True
+        )
+
+        # Create bar plot
+        import matplotlib.pyplot as plt
+
+        domains = [item[0] for item in sorted_domains]
+        percentages = [item[1] for item in sorted_domains]
+        plt.figure(figsize=(12, 8))
+        bars = plt.bar(
+            range(len(domains)),
+            percentages,
+            color="lightcoral",
+            alpha=0.7,
+            edgecolor="black",
+        )
+        plt.title("% of Articles with HTML Content < 5000 Characters by Domain")
+        plt.xlabel("Domain")
+        plt.ylabel("% of Articles")
+        plt.xticks(range(len(domains)), domains, rotation=45, ha="right")
+        plt.grid(True, alpha=0.3)
+        for bar, pct in zip(bars, percentages):
+            plt.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + 0.1,
+                f"{pct:.1f}%",
+                ha="center",
+                va="bottom",
+            )
+        plt.tight_layout()
+        chart_path = report_dir / "short_html_by_domain.png"
+        plt.savefig(chart_path, dpi=300, bbox_inches="tight")
+        plt.close()
+        section = "## Short HTML Content by Domain\n\n"
+        section += f"![Short HTML Content by Domain]({chart_path.name})\n\n"
+        section += "Bar heights show the percentage of articles for each domain with HTML content < 5000 characters.\n\n"
+        section += "### Top Domains with Short HTML Content (by %):\n\n"
+        for domain, pct in sorted_domains[:10]:
+            section += f"- **{domain}**: {pct:.1f}%\n"
+        if len(sorted_domains) > 10:
+            section += f"\n*... and {len(sorted_domains) - 10} more domains*\n"
+        return section
+
+    @staticmethod
+    def _section_short_text_by_domain(
+        self, articles: List[Any], report_dir: Path
+    ) -> str:
+        """Create a bar plot showing percentage of articles with text content < 5000 by domain."""
+        if not articles:
+            return "## Short Text Content by Domain\n\nNo articles found.\n\n"
+        # Filter for error-free articles
+        error_free_articles = [
+            a for a in articles if not getattr(a, "ingestion_error_status", None)
+        ]
+        if not error_free_articles:
+            return (
+                "## Short Text Content by Domain\n\nNo error-free articles found.\n\n"
+            )
+        # Count total articles by domain
+        total_domain_counts = {}
+        for article in error_free_articles:
+            domain = getattr(article, "url_domain", "Unknown")
+            total_domain_counts[domain] = total_domain_counts.get(domain, 0) + 1
+        # Filter for error-free articles with text content < 5000
+        short_text_articles = [
+            a for a in error_free_articles if len(getattr(a, "text_content", "")) < 5000
+        ]
+        if not short_text_articles:
+            return "## Short Text Content by Domain\n\nNo articles with text content < 5000 found.\n\n"
+        # Count short text articles by domain and calculate percentages
+        domain_percentages = {}
+        for article in short_text_articles:
+            domain = getattr(article, "url_domain", "Unknown")
+            domain_percentages[domain] = domain_percentages.get(domain, 0) + 1
+        for domain in domain_percentages:
+            total_articles = total_domain_counts.get(domain, 0)
+            if total_articles > 0:
+                domain_percentages[domain] = (
+                    domain_percentages[domain] / total_articles
+                ) * 100
+        # Sort by percentage descending
+        sorted_domains = sorted(
+            domain_percentages.items(), key=lambda x: x[1], reverse=True
+        )
+        # Create bar plot
+        import matplotlib.pyplot as plt
+
+        domains = [item[0] for item in sorted_domains]
+        percentages = [item[1] for item in sorted_domains]
+        plt.figure(figsize=(12, 8))
+        bars = plt.bar(
+            range(len(domains)),
+            percentages,
+            color="lightblue",
+            alpha=0.7,
+            edgecolor="black",
+        )
+        plt.title("% of Articles with Text Content < 5000 Characters by Domain")
+        plt.xlabel("Domain")
+        plt.ylabel("% of Articles")
+        plt.xticks(range(len(domains)), domains, rotation=45, ha="right")
+        plt.grid(True, alpha=0.3)
+        for bar, pct in zip(bars, percentages):
+            plt.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + 0.1,
+                f"{pct:.1f}%",
+                ha="center",
+                va="bottom",
+            )
+        plt.tight_layout()
+        chart_path = report_dir / "short_text_by_domain.png"
+        plt.savefig(chart_path, dpi=300, bbox_inches="tight")
+        plt.close()
+        section = "## Short Text Content by Domain\n\n"
+        section += f"![Short Text Content by Domain]({chart_path.name})\n\n"
+        section += "Bar heights show the percentage of articles for each domain with text content < 5000 characters.\n\n"
+        section += "### Top Domains with Short Text Content (by %):\n\n"
+        for domain, pct in sorted_domains[:10]:
+            section += f"- **{domain}**: {pct:.1f}%\n"
+        if len(sorted_domains) > 10:
+            section += f"\n*... and {len(sorted_domains) - 10} more domains*\n"
+        return section
+
+    @staticmethod
+    def _section_low_text_html_ratio_by_domain(
+        self, articles: List[Any], report_dir: Path
+    ) -> str:
+        """Create a bar plot showing percentage of articles with text/HTML ratio < 0.5% by domain."""
+        if not articles:
+            return "## Low Text/HTML Ratio by Domain\n\nNo articles found.\n\n"
+        # Filter for error-free articles
+        error_free_articles = [
+            a for a in articles if not getattr(a, "ingestion_error_status", None)
+        ]
+        if not error_free_articles:
+            return (
+                "## Low Text/HTML Ratio by Domain\n\nNo error-free articles found.\n\n"
+            )
+        # Count total articles by domain
+        total_domain_counts = {}
+        for article in error_free_articles:
+            domain = getattr(article, "url_domain", "Unknown")
+            total_domain_counts[domain] = total_domain_counts.get(domain, 0) + 1
+        # Filter for error-free articles with text/HTML ratio < 0.5%
+        low_ratio_articles = []
+        for article in error_free_articles:
+            html_content = getattr(article, "html_content", "")
+            text_content = getattr(article, "text_content", "")
+            html_length = len(html_content) if html_content else 0
+            text_length = len(text_content) if text_content else 0
+            if html_length > 0:
+                ratio = text_length / html_length
+                if ratio < 0.005:  # 0.5%
+                    low_ratio_articles.append(article)
+        if not low_ratio_articles:
+            return "## Low Text/HTML Ratio by Domain\n\nNo articles with text/HTML ratio < 0.5% found.\n\n"
+        # Count low ratio articles by domain and calculate percentages
+        domain_percentages = {}
+        for article in low_ratio_articles:
+            domain = getattr(article, "url_domain", "Unknown")
+            domain_percentages[domain] = domain_percentages.get(domain, 0) + 1
+        for domain in domain_percentages:
+            total_articles = total_domain_counts.get(domain, 0)
+            if total_articles > 0:
+                domain_percentages[domain] = (
+                    domain_percentages[domain] / total_articles
+                ) * 100
+        # Sort by percentage descending
+        sorted_domains = sorted(
+            domain_percentages.items(), key=lambda x: x[1], reverse=True
+        )
+        # Create bar plot
+        import matplotlib.pyplot as plt
+
+        domains = [item[0] for item in sorted_domains]
+        percentages = [item[1] for item in sorted_domains]
+        plt.figure(figsize=(12, 8))
+        bars = plt.bar(
+            range(len(domains)),
+            percentages,
+            color="lightyellow",
+            alpha=0.7,
+            edgecolor="black",
+        )
+        plt.title("% of Articles with Text/HTML Ratio < 0.5% by Domain")
+        plt.xlabel("Domain")
+        plt.ylabel("% of Articles")
+        plt.xticks(range(len(domains)), domains, rotation=45, ha="right")
+        plt.grid(True, alpha=0.3)
+        for bar, pct in zip(bars, percentages):
+            plt.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + 0.1,
+                f"{pct:.1f}%",
+                ha="center",
+                va="bottom",
+            )
+        plt.tight_layout()
+        chart_path = report_dir / "low_text_html_ratio_by_domain.png"
+        plt.savefig(chart_path, dpi=300, bbox_inches="tight")
+        plt.close()
+        section = "## Low Text/HTML Ratio by Domain\n\n"
+        section += f"![Low Text/HTML Ratio by Domain]({chart_path.name})\n\n"
+        section += "Bar heights show the percentage of articles for each domain with text/HTML ratio < 0.5%.\n\n"
+        section += "### Top Domains with Low Text/HTML Ratio (by %):\n\n"
+        for domain, pct in sorted_domains[:10]:
+            section += f"- **{domain}**: {pct:.1f}%\n"
+        if len(sorted_domains) > 10:
+            section += f"\n*... and {len(sorted_domains) - 10} more domains*\n"
         return section
 
 
