@@ -1,25 +1,26 @@
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, Sequence, String, Text
+from sqlalchemy import (
+    JSON,
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Sequence,
+    String,
+    Text,
+)
 from sqlalchemy.orm import relationship
 
 from src.hex_machina.storage.base import Base
 
+# Sequences
+article_id_seq = Sequence("article_id_seq")
+ingestion_op_id_seq = Sequence("ingestion_op_id_seq")
+enrichment_id_seq = Sequence("enrichment_id_seq")
+workflow_operation_id_seq = Sequence("workflow_operation_id_seq")
+
 
 class IngestionOperationDB(Base):
-    """Represents a single ingestion run/process (ORM model).
-
-    Attributes:
-        id (int): Primary key, unique identifier for the ingestion run.
-        start_time (datetime): When the ingestion started.
-        end_time (datetime): When the ingestion finished.
-        num_articles_processed (int): Number of articles processed in this run.
-        num_errors (int): Number of articles that failed in this run.
-        status (str): Status of the ingestion run (e.g., 'success', 'partial', 'failed').
-        parameters (str): (Optional) Parameters/settings used for this run, stored as a JSON string.
-    """
-
     __tablename__ = "ingestion_operations"
-
-    ingestion_op_id_seq = Sequence("ingestion_op_id_seq")
     id = Column(
         Integer,
         ingestion_op_id_seq,
@@ -32,35 +33,28 @@ class IngestionOperationDB(Base):
     num_errors = Column(Integer, nullable=False)
     status = Column(String(32), nullable=False)
     parameters = Column(Text, nullable=True)
-
     articles = relationship("ArticleDB", back_populates="ingestion_operation")
 
 
+class WorkflowOperationDB(Base):
+    __tablename__ = "workflow_operations"
+    id = Column(
+        Integer,
+        workflow_operation_id_seq,
+        server_default=workflow_operation_id_seq.next_value(),
+        primary_key=True,
+    )
+    workflow_name = Column(String(255), nullable=False)
+    parameters = Column(JSON, nullable=True)
+    started_at = Column(DateTime, nullable=False)
+    finished_at = Column(DateTime, nullable=True)
+    status = Column(String(32), nullable=False)
+    notes = Column(Text, nullable=True)
+    enrichments = relationship("EnrichmentDB", back_populates="workflow_operation")
+
+
 class ArticleDB(Base):
-    """Represents an article and its ingestion status.
-
-    Attributes:
-        id (int): Primary key, unique article identifier.
-        title (str): Article title.
-        url (str): URL of the article.
-        source_url (str): URL of the RSS feed source.
-        url_domain (str): Domain of the article URL.
-        published_date (datetime): Publication date.
-        html_content (str): Raw HTML content.
-        text_content (str): Extracted text content.
-        author (str): Article author (optional).
-        article_metadata (str): Additional metadata as a JSON string (tags, summary, etc.).
-        ingestion_metadata (str): Ingestion-related metadata as a JSON string.
-        ingestion_run_id (int): Foreign key to IngestionOperation.
-        ingested_at (datetime): Timestamp when the article was ingested.
-        ingestion_error_status (str): Error status if ingestion failed (optional).
-        ingestion_error_message (str): Error message if ingestion failed (optional).
-        enrichments (list[Enrichment]): All enrichment results for this article.
-    """
-
     __tablename__ = "articles"
-
-    article_id_seq = Sequence("article_id_seq")
     id = Column(
         Integer,
         article_id_seq,
@@ -75,23 +69,38 @@ class ArticleDB(Base):
     html_content = Column(Text, nullable=False)
     text_content = Column(Text, nullable=False)
     author = Column(String(255), nullable=True)
-    article_metadata = Column(
-        Text, nullable=True
-    )  # Store as JSON string for tags, summary, etc.
-    ingestion_metadata = Column(
-        Text, nullable=True
-    )  # Store as JSON string for ingestion-related metadata (e.g., scraper name)
+    article_metadata = Column(Text, nullable=True)
+    ingestion_metadata = Column(Text, nullable=True)
     ingestion_run_id = Column(
         Integer, ForeignKey("ingestion_operations.id"), nullable=False
     )
     ingested_at = Column(DateTime, nullable=False)
     ingestion_error_status = Column(String(64), nullable=True)
     ingestion_error_message = Column(Text, nullable=True)
-
-    ingestion_operation = relationship(
-        "IngestionOperationDB", back_populates="articles"
-    )
-
+    ingestion_operation = relationship(IngestionOperationDB, back_populates="articles")
     enrichments = relationship(
         "EnrichmentDB", back_populates="article", cascade="all, delete-orphan"
     )
+
+
+class EnrichmentDB(Base):
+    __tablename__ = "enrichments"
+    id = Column(
+        Integer,
+        enrichment_id_seq,
+        server_default=enrichment_id_seq.next_value(),
+        primary_key=True,
+    )
+    article_id = Column(Integer, ForeignKey("articles.id"), nullable=False)
+    workflow_operation_id = Column(
+        Integer, ForeignKey("workflow_operations.id"), nullable=False
+    )
+    enrichment_type = Column(String(64), nullable=False)
+    enrichment_data = Column(JSON, nullable=False)
+    source = Column(String(64), nullable=False)
+    tool_name = Column(String(128), nullable=True)
+    tool_params = Column(JSON, nullable=True)
+    created_at = Column(DateTime, nullable=False)
+    version = Column(String(32), nullable=True)
+    article = relationship(ArticleDB, back_populates="enrichments")
+    workflow_operation = relationship(WorkflowOperationDB, back_populates="enrichments")

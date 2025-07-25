@@ -57,25 +57,16 @@ class BaseReportGenerator(ABC):
             return None
 
     def _create_report_directory(self, operation: Any) -> Path:
-        """Create timestamped directory for the report.
-
-        Args:
-            operation: Operation data
-
-        Returns:
-            Path to the created report directory
-        """
-        # Determine date for directory name
+        """Create directory for the report as {output_dir}/{YYYY-MM-DD_HH-MM-SS}_{report_type}/."""
         dt = self._get_operation_date(operation)
         if not dt:
+            import datetime
+
             dt = datetime.datetime.now()
-
         date_str = dt.strftime("%Y-%m-%d_%H-%M-%S")
-        operation_id = self._get_operation_id(operation)
-        dir_name = f"{self._get_report_type()}_{operation_id}_{date_str}"
-        report_dir = self.output_dir / dir_name
+        report_type = self._get_report_type()
+        report_dir = self.output_dir / f"{date_str}_{report_type}"
         report_dir.mkdir(parents=True, exist_ok=True)
-
         return report_dir
 
     def _build_html_report(
@@ -235,6 +226,36 @@ class BaseReportGenerator(ABC):
     </div>
 </body>
 </html>"""
+
+    def _extract_field_from_metadata(self, article: Any, field: str) -> Any:
+        """Extract a field from article metadata.
+
+        Args:
+            article: Article object
+            field: Field name to extract
+
+        Returns:
+            Field value or None if not found
+        """
+        import json
+
+        try:
+            metadata = getattr(article, "article_metadata", None)
+            if metadata:
+                if isinstance(metadata, str):
+                    meta = json.loads(metadata)
+                else:
+                    meta = metadata
+                value = meta.get(field)
+                # Check if value is not empty
+                if value and (
+                    (isinstance(value, str) and value.strip())
+                    or (isinstance(value, list) and len(value) > 0)
+                ):
+                    return value
+        except (json.JSONDecodeError, AttributeError, TypeError):
+            pass
+        return None
 
     @abstractmethod
     def _generate_report_sections(

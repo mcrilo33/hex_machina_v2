@@ -21,10 +21,10 @@ scrapy:
   download_timeout: 120  # Reasonable timeout
   download_maxsize: 10485760  # 10MB limit to prevent large downloads
   
-  # Retry Settings - Handle temporary failures
-  retry_enabled: true
-  retry_times: 3
-  retry_http_codes: [500, 502, 503, 504, 408]  # Remove 429 to avoid rate limit detection
+      # Retry Settings - Handle temporary failures and redirects
+    retry_enabled: true
+    retry_times: 3
+    retry_http_codes: [500, 502, 503, 504, 408, 301, 302, 307, 308]  # Include redirect codes
   
   # Cache Settings - Reduce load on target sites and improve performance
   httpcache_enabled: true
@@ -69,9 +69,10 @@ scrapy:
     COOKIES_DEBUG: false
     COOKIES_ENABLED: true
     
-    # Redirect Settings - Conservative
+    # Redirect Settings - Handle 301/302 redirects properly
     REDIRECT_ENABLED: true
-    REDIRECT_MAX_TIMES: 5  # Fewer redirects
+    REDIRECT_MAX_TIMES: 10  # Allow more redirects for complex sites
+    REDIRECT_PRIORITY_ADJUST: 0  # Don't change priority for redirects
     
     # Crawl Settings - Conservative
     AJAXCRAWL_ENABLED: false
@@ -87,11 +88,12 @@ scrapy:
     DOWNLOADER_MIDDLEWARES: {
       'scrapy.downloadermiddlewares.useragent.UserAgentMiddleware': None,
       'scrapy.downloadermiddlewares.retry.RetryMiddleware': 550,
-      'scrapy.downloadermiddlewares.redirect.RedirectMiddleware': 600,
+      'src.hex_machina.ingestion.middleware.CustomRedirectMiddleware': 600,  # Custom redirect handling
       'scrapy.downloadermiddlewares.httpproxy.HttpProxyMiddleware': 750,
       'scrapy.downloadermiddlewares.httpcompression.HttpCompressionMiddleware': 810,
       'scrapy.downloadermiddlewares.cookies.CookiesMiddleware': 700,
       'scrapy.downloadermiddlewares.httpcache.HttpCacheMiddleware': 900,
+      'src.hex_machina.ingestion.middleware.RedirectLoggingMiddleware': 950,  # Log redirects
     }
     
     # Disable default user agent middleware to use custom one

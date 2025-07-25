@@ -7,7 +7,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from src.hex_machina.storage.adapter import BaseDBAdapter
-from src.hex_machina.storage.models import ArticleDB, Base, IngestionOperationDB
+from src.hex_machina.storage.base import Base
+from src.hex_machina.storage.models import ArticleDB, IngestionOperationDB
 
 
 class DuckDBAdapter(BaseDBAdapter):

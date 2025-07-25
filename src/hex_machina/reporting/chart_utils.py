@@ -13,30 +13,16 @@ from src.hex_machina.utils.logging_utils import get_logger
 def create_time_series_chart(
     data: List[Dict[str, Any]],
     date_field: str,
-    group_field: str,
-    output_dir: str,
-    filename: str,
-    title: str,
+    group_field: str = None,
+    output_dir: str = ".",
+    filename: str = "chart.png",
+    title: str = "Time Series Chart",
     max_groups: int = 30,
     max_columns: int = 10,
     filter_func: Optional[callable] = None,
+    value_field: str = None,  # <-- Add this
 ) -> str:
-    """Create a time series chart with grouped data.
-
-    Args:
-        data: List of data dictionaries
-        date_field: Field name containing the date
-        group_field: Field name to group by
-        output_dir: Directory to save the chart
-        filename: Name of the output file
-        title: Chart title
-        max_groups: Maximum number of groups to show (others grouped as 'Other')
-        max_columns: Maximum number of time units to show
-        filter_func: Optional function to filter data before processing
-
-    Returns:
-        Markdown string with image reference
-    """
+    """Create a time series chart with grouped data. Optionally plot a value_field instead of count."""
     logger = get_logger(__name__)
 
     try:
@@ -75,18 +61,30 @@ No data available to plot.
             )
 
         # Top groups
-        top_groups = [g for g, _ in Counter(df[group_field]).most_common(max_groups)]
-        df["group_category"] = df[group_field].apply(
-            lambda g: g if g in top_groups else "Other"
-        )
+        if group_field:
+            top_groups = [
+                g for g, _ in Counter(df[group_field]).most_common(max_groups)
+            ]
+            df["group_category"] = df[group_field].apply(
+                lambda g: g if g in top_groups else "Other"
+            )
+        else:
+            df["group_category"] = "All"
 
         # Pivot table
+        if value_field:
+            aggfunc = "sum"
+            values = value_field
+        else:
+            aggfunc = "count"
+            values = group_field if group_field else date_field
+
         pivot = pd.pivot_table(
             df,
             index="time_unit",
             columns="group_category",
-            values=group_field,
-            aggfunc="count",
+            values=values,
+            aggfunc=aggfunc,
             fill_value=0,
         )
         pivot = pivot.sort_index()
@@ -96,7 +94,7 @@ No data available to plot.
         pivot.plot(kind="bar", stacked=True, ax=plt.gca())
         plt.title(title)
         plt.xlabel("Date")
-        plt.ylabel("Count")
+        plt.ylabel(value_field.replace("_", " ").title() if value_field else "Count")
         plt.xticks(rotation=45, ha="right")
         plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
         plt.tight_layout()

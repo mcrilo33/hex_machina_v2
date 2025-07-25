@@ -1,0 +1,3 @@
+"""Prompt templates and prompt versioning utilities for LLM enrichment."""
+
+# Example: def load_prompt(name: str) -> str: ...

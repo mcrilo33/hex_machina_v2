@@ -1,9 +1,8 @@
 """Ingestion-specific report generator."""
 
 import datetime
-import json
 from pathlib import Path
-from typing import Any, List
+from typing import List
 
 from src.hex_machina.ingestion.article_models import ArticleModel
 from src.hex_machina.reporting.base_report_generator import BaseReportGenerator
@@ -138,14 +137,38 @@ class IngestionReportGenerator(BaseReportGenerator):
         """
         # Prepare data for chart
         data = []
+        domain_error_counts = {}
+
+        # First pass: collect all data and count errors per domain
         for article in articles:
             domain = getattr(article, "url_domain", None)
             status = getattr(article, "ingestion_error_status", None) or "no error"
             if domain:
                 data.append({"url_domain": domain, "status": status})
+                # Count errors per domain
+                if domain not in domain_error_counts:
+                    domain_error_counts[domain] = {"errors": 0, "total": 0}
+                domain_error_counts[domain]["total"] += 1
+                if status != "no error":
+                    domain_error_counts[domain]["errors"] += 1
+
+        # Filter out domains with no errors
+        domains_with_errors = {
+            domain
+            for domain, counts in domain_error_counts.items()
+            if counts["errors"] > 0
+        }
+
+        # Filter data to only include domains with errors
+        filtered_data = [
+            item for item in data if item["url_domain"] in domains_with_errors
+        ]
+
+        if not filtered_data:
+            return "## Error Distribution by Domain and Status\n\nNo domains with errors found.\n\n"
 
         return create_distribution_chart(
-            data=data,
+            data=filtered_data,
             group_field="url_domain",
             status_field="status",
             output_dir=str(report_dir),
@@ -179,36 +202,6 @@ class IngestionReportGenerator(BaseReportGenerator):
             field_extractors=field_extractors,
             title="Field Coverage Summary",
         )
-
-    def _extract_field_from_metadata(self, article: ArticleModel, field: str) -> Any:
-        """Extract a field from article metadata.
-
-        Args:
-            article: Article object
-            field: Field name to extract
-
-        Returns:
-            Field value or None if not found
-        """
-        try:
-            metadata = getattr(article, "article_metadata", None)
-            if metadata:
-                if isinstance(metadata, str):
-                    meta = json.loads(metadata)
-                else:
-                    meta = metadata
-                value = meta.get(field)
-                # Check if value is not empty
-                if value and (
-                    isinstance(value, str)
-                    and value.strip()
-                    or isinstance(value, list)
-                    and len(value) > 0
-                ):
-                    return value
-        except (json.JSONDecodeError, AttributeError, TypeError):
-            pass
-        return None
 
 
 def generate_html_ingestion_report(

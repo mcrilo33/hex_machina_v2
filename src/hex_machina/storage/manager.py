@@ -1,7 +1,12 @@
 from typing import List, Optional
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
 from src.hex_machina.storage.duckdb_adapter import DuckDBAdapter
 from src.hex_machina.storage.models import ArticleDB, IngestionOperationDB
+
+# Remove direct model imports for registration; only import for method logic if needed.
 
 
 class StorageManager:
@@ -13,6 +18,11 @@ class StorageManager:
 
     def __init__(self, db_path: str) -> None:
         self._adapter = DuckDBAdapter(db_path)
+        self.engine = create_engine(f"duckdb:///{db_path}")
+        self.Session = sessionmaker(bind=self.engine)
+
+    def session(self):
+        return self.Session()
 
     # --- IngestionOperation CRUD ---
 
@@ -40,6 +50,14 @@ class StorageManager:
         """List all ingestion operations in the database."""
         return self._adapter.list_ingestion_operations()
 
+    def get_all_ingestion_operations(self):
+        with self.session() as session:
+            return (
+                session.query(IngestionOperationDB)
+                .order_by(IngestionOperationDB.start_time)
+                .all()
+            )
+
     # --- Article CRUD ---
 
     def add_article(self, article: ArticleDB) -> ArticleDB:
@@ -61,6 +79,10 @@ class StorageManager:
     def list_articles(self) -> List[ArticleDB]:
         """List all articles in the database."""
         return self._adapter.list_articles()
+
+    def get_all_articles(self):
+        with self.session() as session:
+            return session.query(ArticleDB).all()
 
     def get_articles_for_operation(
         self, run_id: Optional[str] = None

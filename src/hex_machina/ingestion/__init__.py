@@ -3,7 +3,7 @@
 from src.hex_machina.ingestion.article_models import ArticleModel, RSSArticlePreview
 from src.hex_machina.ingestion.config_loader import load_ingestion_config
 from src.hex_machina.ingestion.config_models import IngestionConfig
-from src.hex_machina.ingestion.ingestion_report_generator import (
+from src.hex_machina.ingestion.ingestion_report import (
     IngestionReportGenerator,
     generate_html_ingestion_report,
 )
