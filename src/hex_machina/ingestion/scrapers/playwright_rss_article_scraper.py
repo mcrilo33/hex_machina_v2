@@ -7,6 +7,7 @@ import scrapy
 from scrapy_playwright.page import PageMethod
 
 from src.hex_machina.ingestion.article_models import ArticleModel
+from src.hex_machina.ingestion.content_validator import create_content_validator
 from src.hex_machina.ingestion.scrapers.rss_article_scraper import RSSArticleScraper
 from src.hex_machina.utils.logging_utils import get_logger
 
@@ -36,6 +37,7 @@ class PlaywrightRSSArticleScraper(RSSArticleScraper):
             **kwargs,
         )
         self._logger = get_logger(f"hex_machina.scraper.{self.name}")
+        self.content_validator = create_content_validator()
 
     async def parse_article(self, article: ArticleModel) -> Any:
         """Schedule a Scrapy request to parse the article content with Playwright.
@@ -62,6 +64,13 @@ class PlaywrightRSSArticleScraper(RSSArticleScraper):
                 "scraped_article": article,
                 "playwright": True,
                 "playwright_include_page": True,
+                "dont_redirect": False,  # Allow redirects
+                "handle_httpstatus_list": [
+                    301,
+                    302,
+                    307,
+                    308,
+                ],  # Handle redirect status codes
                 "playwright_page_methods": [
                     # Stealth: Hide webdriver
                     PageMethod(
@@ -98,106 +107,203 @@ class PlaywrightRSSArticleScraper(RSSArticleScraper):
                     PageMethod("wait_for_load_state", "networkidle"),
                     # Captcha detection: wait for known captcha selectors (log if found)
                     PageMethod(
-                        "evaluate",
-                        """
-                        () => {
-                            const captcha = document.querySelector('iframe[src*="captcha"], .g-recaptcha, [id*="captcha"], [class*="captcha"]');
-                            if (captcha) {
-                                console.warn('CAPTCHA detected by Playwright!');
-                            }
-                        }
-                        """,
+                        "wait_for_selector",
+                        ".captcha, .recaptcha, .g-recaptcha, [data-sitekey]",
+                        timeout=2000,
                     ),
-                    # Human-like mouse/keyboard actions
-                    PageMethod("mouse.move", mouse_x, mouse_y),
-                    PageMethod("mouse.wheel", 0, wheel_delta),
-                    PageMethod("keyboard.press", "PageDown"),
-                    # Resource blocking (images, media, fonts)
+                    # Human-like interactions
                     PageMethod(
-                        "route",
-                        "**/*",
-                        """
-                        (route, request) => {
-                            const type = request.resourceType();
-                            if ([\"image\", \"media\", \"font\"].includes(type)) {
-                                route.abort();
-                            } else {
-                                route.continue();
-                            }
-                        }
-                        """,
+                        "mouse_move",
+                        x=mouse_x,
+                        y=mouse_y,
                     ),
-                    # Optional: Add a small random delay to mimic human browsing
+                    PageMethod("wheel", delta_y=wheel_delta),
                     PageMethod("wait_for_timeout", delay),
                 ],
-                "playwright_context": {
-                    "viewport": {"width": 1280, "height": 800},
-                    "device_scale_factor": 1,
-                    "is_mobile": False,
-                    "has_touch": False,
-                    "java_script_enabled": True,
-                    # "proxy": {...},  # Uncomment and configure if you need proxies
+                "playwright_page_kwargs": {
+                    "user_agent": user_agent,
+                    "viewport": {"width": 1920, "height": 1080},
+                    "extra_http_headers": {
+                        "Accept-Language": "en-US,en;q=0.9",
+                        "Accept-Encoding": "gzip, deflate, br",
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                        "DNT": "1",
+                        "Connection": "keep-alive",
+                        "Upgrade-Insecure-Requests": "1",
+                    },
                 },
-                "headers": {
-                    "User-Agent": user_agent,
-                    "Accept-Language": "en-US,en;q=0.9",
-                    "Accept-Encoding": "gzip, deflate, br",
-                },
-                "handle_httpstatus_all": True,
+            },
+            headers={
+                "User-Agent": user_agent,
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.5",
+                "Accept-Encoding": "gzip, deflate, br",
+                "DNT": "1",
+                "Connection": "keep-alive",
+                "Upgrade-Insecure-Requests": "1",
             },
         )
 
     async def handle_error(self, failure: Any) -> Dict[str, Any]:
-        """Handle errors during article fetching.
+        """Handle request errors and extract error information."""
+        request = failure.request
+        article = request.meta.get("scraped_article")
 
-        Args:
-            failure: Scrapy failure object.
-        Returns:
-            Error ArticleModel.
-        """
-        try:
-            error_message = str(failure.value)
-        except Exception:
-            error_message = str(failure)
-        response = getattr(failure, "response", None)
-        url = getattr(response, "url", None) if response else None
-        error_status = getattr(response, "status", None) if response else None
-        article = (
-            response.meta.get("scraped_article")
-            if response and hasattr(response, "meta")
-            else None
+        error_info = {
+            "url": request.url,
+            "error_type": str(failure.type),
+            "error_message": str(failure.value),
+            "article_title": getattr(article, "title", "Unknown"),
+        }
+
+        self._logger.error(
+            f"Error processing article {error_info['article_title']}: {error_info['error_message']}"
         )
-        self._logger.warning(f"Error fetching {url}: {error_message}")
 
-        article.url = url
-        article.ingestion_error_status = str(error_status)
-        article.ingestion_error_message = error_message
-        article.ingestion_metadata = {"scraper_name": self.name}
+        # Update article with error information
+        if article:
+            article.ingestion_error_status = error_info["error_type"]
+            article.ingestion_error_message = error_info["error_message"]
+            article.ingestion_metadata = {
+                "scraper_name": self.name,
+                "error": error_info,
+            }
 
         yield article
 
     async def parse(self, response: scrapy.http.Response) -> Any:
-        """Process the HTTP response and extract article content.
-
-        Args:
-            response: Scrapy response object.
-        Yields:
-            Article dict with extracted content or error info.
-        """
-        if response.status != 200:
-            failure = scrapy.spidermiddlewares.httperror.HttpError(response)
-            async for item in self.handle_error(failure):
-                yield item
+        """Parse the article content and validate it."""
+        article = response.meta.get("scraped_article")
+        if not article:
+            self._logger.error("No article found in response meta")
             return
 
-        html_content = response.text if response.text else ""
-        article = response.meta.get("scraped_article", None)
-        text_content, error_status, error_message = self.parse_html(html_content)
+        # Get HTML content from Playwright page
+        page = response.meta.get("playwright_page")
+        if page:
+            try:
+                # Get the full HTML content
+                html_content = await page.content()
 
-        article.html_content = html_content
-        article.text_content = text_content
-        article.ingestion_error_status = error_status
-        article.ingestion_error_message = error_message
-        article.ingestion_metadata = {"scraper_name": self.name}
+                # Validate the content for blocking/anti-bot detection
+                is_valid, validation_result = self.content_validator.validate_content(
+                    html_content=html_content,
+                    url=response.url,
+                    status_code=response.status,
+                )
+
+                # Log validation results
+                validation_summary = self.content_validator.extract_validation_summary(
+                    validation_result
+                )
+                self._logger.info(
+                    f"Content validation for {article.title}: {validation_summary}"
+                )
+
+                # If content is blocked or invalid, mark as error
+                if not is_valid:
+                    article.ingestion_error_status = "content_blocked"
+                    article.ingestion_error_message = f"Content validation failed: {', '.join(validation_result['issues'])}"
+                    article.ingestion_metadata = {
+                        "scraper_name": self.name,
+                        "validation_result": validation_result,
+                    }
+                    self._logger.warning(
+                        f"Blocked content detected for {article.title}: {validation_result['issues']}"
+                    )
+                    yield article
+
+                # Check for captcha detection
+                captcha_selectors = [
+                    ".captcha",
+                    ".recaptcha",
+                    ".g-recaptcha",
+                    "[data-sitekey]",
+                ]
+                captcha_found = False
+                for selector in captcha_selectors:
+                    try:
+                        element = await page.query_selector(selector)
+                        if element:
+                            captcha_found = True
+                            break
+                    except Exception:
+                        continue
+
+                if captcha_found:
+                    self._logger.warning(
+                        f"CAPTCHA detected for article: {article.title}"
+                    )
+                    article.ingestion_error_status = "captcha_detected"
+                    article.ingestion_error_message = "CAPTCHA detected"
+                    article.ingestion_metadata = {
+                        "scraper_name": self.name,
+                        "captcha_found": True,
+                        "validation_result": validation_result,
+                    }
+                else:
+                    # Extract text content
+                    text_content = await page.evaluate("() => document.body.innerText")
+
+                    # Update article with content
+                    article.html_content = html_content
+                    article.text_content = text_content
+                    article.ingestion_metadata = {
+                        "scraper_name": self.name,
+                        "captcha_found": False,
+                        "validation_result": validation_result,
+                    }
+
+                    self._logger.info(
+                        f"Successfully processed article: {article.title}"
+                    )
+
+            except Exception as e:
+                self._logger.error(
+                    f"Error processing page content for {article.title}: {str(e)}"
+                )
+                article.ingestion_error_status = "page_processing_error"
+                article.ingestion_error_message = str(e)
+                article.ingestion_metadata = {
+                    "scraper_name": self.name,
+                    "error": str(e),
+                }
+            finally:
+                await page.close()
+        else:
+            # Fallback to regular Scrapy response
+            html_content = response.text
+
+            # Validate the content
+            is_valid, validation_result = self.content_validator.validate_content(
+                html_content=html_content, url=response.url, status_code=response.status
+            )
+
+            if not is_valid:
+                article.ingestion_error_status = "content_blocked"
+                article.ingestion_error_message = f"Content validation failed: {', '.join(validation_result['issues'])}"
+                article.ingestion_metadata = {
+                    "scraper_name": self.name,
+                    "validation_result": validation_result,
+                }
+                self._logger.warning(
+                    f"Blocked content detected for {article.title}: {validation_result['issues']}"
+                )
+                yield article
+
+            # Extract text content using basic method
+            from bs4 import BeautifulSoup
+
+            soup = BeautifulSoup(html_content, "html.parser")
+            text_content = soup.get_text(separator=" ", strip=True)
+
+            article.html_content = html_content
+            article.text_content = text_content
+            article.ingestion_metadata = {
+                "scraper_name": self.name,
+                "validation_result": validation_result,
+            }
+
+            self._logger.info(f"Successfully processed article: {article.title}")
 
         yield article

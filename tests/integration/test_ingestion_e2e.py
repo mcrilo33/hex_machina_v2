@@ -52,7 +52,7 @@ try:
             "run",
             "python",
             "-m",
-            "src.hex_machina.ingestion.ingestion_script",
+            "src.hex_machina.ingestion.scripts.ingestion_script",
             "--config",
             str(INTEGRATION_DIR / "integration_scraping_config.yaml"),
             "--output-dir",

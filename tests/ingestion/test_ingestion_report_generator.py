@@ -6,9 +6,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
-from src.hex_machina.ingestion.ingestion_report_generator import (
-    IngestionReportGenerator,
-)
+from src.hex_machina.ingestion.ingestion_report import *
 from src.hex_machina.reporting.report_builder import ReportBuilder
 
 

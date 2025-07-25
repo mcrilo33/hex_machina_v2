@@ -198,3 +198,6 @@ cursor-watchful-headers/
 .cursorrules
 watcher.py
 migration/previous_db/hex_tinydb.json
+
+reports/
+last_test_e2e_report
