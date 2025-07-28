@@ -7,8 +7,10 @@ from typing import List
 from src.hex_machina.ingestion.article_models import ArticleModel
 from src.hex_machina.reporting.base_report_generator import BaseReportGenerator
 from src.hex_machina.reporting.chart_utils import (
+    create_content_length_distribution,
     create_distribution_chart,
     create_field_coverage_table,
+    create_text_html_ratio_distribution,
     create_time_series_chart,
 )
 from src.hex_machina.reporting.report_builder import ReportBuilder
@@ -46,6 +48,9 @@ class IngestionReportGenerator(BaseReportGenerator):
             ReportBuilder.section_domain_error_table(articles),
             self._section_success_articles_over_time(articles, report_dir),
             self._section_error_distribution_by_domain(articles, report_dir),
+            self._section_html_length_distribution(articles_no_error, report_dir),
+            self._section_text_length_distribution(articles_no_error, report_dir),
+            self._section_text_html_ratio_distribution(articles_no_error, report_dir),
             self._section_field_coverage_summary(articles_no_error),
         ]
 
@@ -174,6 +179,106 @@ class IngestionReportGenerator(BaseReportGenerator):
             output_dir=str(report_dir),
             filename="error_distribution_by_domain.png",
             title="Error Distribution by Domain and Status",
+        )
+
+    def _section_html_length_distribution(
+        self, articles: List[ArticleModel], report_dir: Path
+    ) -> str:
+        """Generate HTML content length distribution chart section.
+
+        Args:
+            articles: List of articles with no errors
+            report_dir: Directory for saving charts
+
+        Returns:
+            Markdown section string
+        """
+        # Prepare data for chart
+        data = []
+        for article in articles:
+            html_content = getattr(article, "html_content", None)
+            if html_content:
+                html_length = len(html_content)
+                data.append({"html_length": html_length})
+
+        if not data:
+            return "## HTML Content Length Distribution\n\nNo HTML content data available.\n\n"
+
+        return create_content_length_distribution(
+            data=data,
+            length_field="html_length",
+            output_dir=str(report_dir),
+            filename="html_length_distribution.png",
+            title="HTML Content Length Distribution",
+            max_length=50000,  # Cap at 50k to handle outliers
+        )
+
+    def _section_text_length_distribution(
+        self, articles: List[ArticleModel], report_dir: Path
+    ) -> str:
+        """Generate text content length distribution chart section.
+
+        Args:
+            articles: List of articles with no errors
+            report_dir: Directory for saving charts
+
+        Returns:
+            Markdown section string
+        """
+        # Prepare data for chart
+        data = []
+        for article in articles:
+            text_content = getattr(article, "text_content", None)
+            if text_content:
+                text_length = len(text_content)
+                data.append({"text_length": text_length})
+
+        if not data:
+            return "## Text Content Length Distribution\n\nNo text content data available.\n\n"
+
+        return create_content_length_distribution(
+            data=data,
+            length_field="text_length",
+            output_dir=str(report_dir),
+            filename="text_length_distribution.png",
+            title="Text Content Length Distribution",
+            max_length=20000,  # Cap at 20k to handle outliers
+        )
+
+    def _section_text_html_ratio_distribution(
+        self, articles: List[ArticleModel], report_dir: Path
+    ) -> str:
+        """Generate text-to-HTML ratio distribution chart section.
+
+        Args:
+            articles: List of articles with no errors
+            report_dir: Directory for saving charts
+
+        Returns:
+            Markdown section string
+        """
+        # Prepare data for chart
+        data = []
+        for article in articles:
+            text_content = getattr(article, "text_content", None)
+            html_content = getattr(article, "html_content", None)
+            if text_content and html_content and len(html_content) > 0:
+                text_length = len(text_content)
+                html_length = len(html_content)
+                ratio = text_length / html_length
+                data.append({"text_length": text_length, "html_length": html_length})
+
+        if not data:
+            return "## Text-to-HTML Ratio Distribution\n\nNo text-to-HTML ratio data available.\n\n"
+
+        return create_text_html_ratio_distribution(
+            data=data,
+            html_length_field="html_length",
+            text_length_field="text_length",
+            output_dir=str(report_dir),
+            filename="text_html_ratio_distribution.png",
+            title="Text-to-HTML Ratio Distribution",
+            max_ratio=0.5,  # Cap at 0.5 to handle outliers
         )
 
     def _section_field_coverage_summary(self, articles: List[ArticleModel]) -> str:

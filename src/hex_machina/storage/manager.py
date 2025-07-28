@@ -60,8 +60,12 @@ class StorageManager:
 
     # --- Article CRUD ---
 
-    def add_article(self, article: ArticleDB) -> ArticleDB:
-        """Add a new article to the database."""
+    def add_article(self, article: ArticleDB) -> Optional[ArticleDB]:
+        """Add a new article to the database.
+
+        Returns:
+            ArticleDB if successfully added, None if duplicate exists
+        """
         return self._adapter.add_article(article)
 
     def get_article(self, article_id: int) -> Optional[ArticleDB]:

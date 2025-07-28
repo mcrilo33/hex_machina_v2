@@ -67,14 +67,15 @@ class BaseDBAdapter(ABC):
     # --- Article CRUD ---
 
     @abstractmethod
-    def add_article(self, article: ArticleDB) -> ArticleDB:
+    def add_article(self, article: ArticleDB) -> Optional[ArticleDB]:
         """Add a new article to the database.
 
         Args:
             article (Article): The article to add.
 
         Returns:
-            Article: The added ORM object (with ID assigned).
+            Optional[ArticleDB]: The added ORM object (with ID assigned) if successful,
+                               None if duplicate exists.
         """
         pass
 
@@ -126,20 +127,5 @@ class BaseDBAdapter(ABC):
 
         Returns:
             List[IngestionOperation]: List of all ingestion operation ORM objects.
-        """
-        pass
-
-    @abstractmethod
-    def get_article_by_domain_and_title(
-        self, url_domain: str, title: str
-    ) -> Optional[ArticleDB]:
-        """Retrieve an article by its url_domain and title.
-
-        Args:
-            url_domain (str): The domain of the article URL.
-            title (str): The title of the article.
-
-        Returns:
-            Optional[ArticleDB]: The ORM object if found, else None.
         """
         pass

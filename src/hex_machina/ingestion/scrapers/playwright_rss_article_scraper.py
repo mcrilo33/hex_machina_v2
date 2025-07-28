@@ -1,26 +1,16 @@
 """Playwright RSS article scraper for Hex Machina v2."""
 
-import random
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 import scrapy
-from scrapy_playwright.page import PageMethod
 
 from src.hex_machina.ingestion.article_models import ArticleModel
 from src.hex_machina.ingestion.content_validator import create_content_validator
+from src.hex_machina.ingestion.scrapers.playwright_mixin import PlaywrightMixin
 from src.hex_machina.ingestion.scrapers.rss_article_scraper import RSSArticleScraper
-from src.hex_machina.utils.logging_utils import get_logger
-
-# List of realistic User-Agents for rotation
-USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
-]
 
 
-class PlaywrightRSSArticleScraper(RSSArticleScraper):
+class PlaywrightRSSArticleScraper(RSSArticleScraper, PlaywrightMixin):
     """Scraper for articles using Playwright for JavaScript rendering."""
 
     name = "playwright_rss_article_scraper"
@@ -31,12 +21,14 @@ class PlaywrightRSSArticleScraper(RSSArticleScraper):
         start_urls: Optional[list] = None,
         **kwargs,
     ) -> None:
-        super().__init__(
+        RSSArticleScraper.__init__(
+            self,
             scraper_config=scraper_config,
             start_urls=start_urls,
             **kwargs,
         )
-        self._logger = get_logger(f"hex_machina.scraper.{self.name}")
+        PlaywrightMixin.__init__(self)
+        # Logger is inherited from BaseArticleScraper
         self.content_validator = create_content_validator()
 
     async def parse_article(self, article: ArticleModel) -> Any:
@@ -48,128 +40,16 @@ class PlaywrightRSSArticleScraper(RSSArticleScraper):
         - Simulates random human-like mouse/keyboard interactions
         - All previous anti-bot and performance options
         """
-        # Randomize User-Agent
-        user_agent = random.choice(USER_AGENTS)
-        # Randomize mouse movement and delay
-        mouse_x = random.randint(0, 800)
-        mouse_y = random.randint(0, 600)
-        wheel_delta = random.randint(100, 1000)
-        delay = random.randint(500, 2000)
-
-        yield scrapy.Request(
+        # Create Playwright request using the mixin
+        request = await self.create_playwright_request(
             url=article.url,
             callback=self.parse,
-            errback=self.handle_error,
-            meta={
-                "scraped_article": article,
-                "playwright": True,
-                "playwright_include_page": True,
-                "dont_redirect": False,  # Allow redirects
-                "handle_httpstatus_list": [
-                    301,
-                    302,
-                    307,
-                    308,
-                ],  # Handle redirect status codes
-                "playwright_page_methods": [
-                    # Stealth: Hide webdriver
-                    PageMethod(
-                        "evaluate",
-                        "() => Object.defineProperty(navigator, 'webdriver', {get: () => undefined})",
-                    ),
-                    # Stealth: Fake languages
-                    PageMethod(
-                        "add_init_script",
-                        "Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});",
-                    ),
-                    # Stealth: Fake plugins
-                    PageMethod(
-                        "add_init_script",
-                        "Object.defineProperty(navigator, 'plugins', {get: () => [1,2,3,4,5]});",
-                    ),
-                    # Stealth: Fake WebGL vendor/renderer
-                    PageMethod(
-                        "add_init_script",
-                        """
-                        const getParameter = WebGLRenderingContext.prototype.getParameter;
-                        WebGLRenderingContext.prototype.getParameter = function(parameter) {
-                            if (parameter === 37445) { return 'Intel Inc.'; }
-                            if (parameter === 37446) { return 'Intel Iris OpenGL Engine'; }
-                            return getParameter(parameter);
-                        };
-                        """,
-                    ),
-                    # Wait for main content or network idle
-                    PageMethod(
-                        "wait_for_selector",
-                        "article, .main-content, .post, [role=main]",
-                    ),
-                    PageMethod("wait_for_load_state", "networkidle"),
-                    # Captcha detection: wait for known captcha selectors (log if found)
-                    PageMethod(
-                        "wait_for_selector",
-                        ".captcha, .recaptcha, .g-recaptcha, [data-sitekey]",
-                        timeout=2000,
-                    ),
-                    # Human-like interactions
-                    PageMethod(
-                        "mouse_move",
-                        x=mouse_x,
-                        y=mouse_y,
-                    ),
-                    PageMethod("wheel", delta_y=wheel_delta),
-                    PageMethod("wait_for_timeout", delay),
-                ],
-                "playwright_page_kwargs": {
-                    "user_agent": user_agent,
-                    "viewport": {"width": 1920, "height": 1080},
-                    "extra_http_headers": {
-                        "Accept-Language": "en-US,en;q=0.9",
-                        "Accept-Encoding": "gzip, deflate, br",
-                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-                        "DNT": "1",
-                        "Connection": "keep-alive",
-                        "Upgrade-Insecure-Requests": "1",
-                    },
-                },
-            },
-            headers={
-                "User-Agent": user_agent,
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-                "Accept-Language": "en-US,en;q=0.5",
-                "Accept-Encoding": "gzip, deflate, br",
-                "DNT": "1",
-                "Connection": "keep-alive",
-                "Upgrade-Insecure-Requests": "1",
-            },
+            errback=self.handle_playwright_error,
+            article=article,
+            use_advanced_stealth=False,
         )
 
-    async def handle_error(self, failure: Any) -> Dict[str, Any]:
-        """Handle request errors and extract error information."""
-        request = failure.request
-        article = request.meta.get("scraped_article")
-
-        error_info = {
-            "url": request.url,
-            "error_type": str(failure.type),
-            "error_message": str(failure.value),
-            "article_title": getattr(article, "title", "Unknown"),
-        }
-
-        self._logger.error(
-            f"Error processing article {error_info['article_title']}: {error_info['error_message']}"
-        )
-
-        # Update article with error information
-        if article:
-            article.ingestion_error_status = error_info["error_type"]
-            article.ingestion_error_message = error_info["error_message"]
-            article.ingestion_metadata = {
-                "scraper_name": self.name,
-                "error": error_info,
-            }
-
-        yield article
+        yield request
 
     async def parse(self, response: scrapy.http.Response) -> Any:
         """Parse the article content and validate it."""
@@ -242,12 +122,9 @@ class PlaywrightRSSArticleScraper(RSSArticleScraper):
                         "validation_result": validation_result,
                     }
                 else:
-                    # Extract text content
-                    text_content = await page.evaluate("() => document.body.innerText")
-
                     # Update article with content
                     article.html_content = html_content
-                    article.text_content = text_content
+                    article.text_content = self.get_text_content(html_content)
                     article.ingestion_metadata = {
                         "scraper_name": self.name,
                         "captcha_found": False,
@@ -271,7 +148,9 @@ class PlaywrightRSSArticleScraper(RSSArticleScraper):
             finally:
                 await page.close()
         else:
-            # Fallback to regular Scrapy response
+            self._logger.warning(
+                f"Playwright page not available for {response.url}. Using fallback HTML content."
+            )
             html_content = response.text
 
             # Validate the content
@@ -279,26 +158,8 @@ class PlaywrightRSSArticleScraper(RSSArticleScraper):
                 html_content=html_content, url=response.url, status_code=response.status
             )
 
-            if not is_valid:
-                article.ingestion_error_status = "content_blocked"
-                article.ingestion_error_message = f"Content validation failed: {', '.join(validation_result['issues'])}"
-                article.ingestion_metadata = {
-                    "scraper_name": self.name,
-                    "validation_result": validation_result,
-                }
-                self._logger.warning(
-                    f"Blocked content detected for {article.title}: {validation_result['issues']}"
-                )
-                yield article
-
-            # Extract text content using basic method
-            from bs4 import BeautifulSoup
-
-            soup = BeautifulSoup(html_content, "html.parser")
-            text_content = soup.get_text(separator=" ", strip=True)
-
             article.html_content = html_content
-            article.text_content = text_content
+            article.text_content = self.get_text_content(html_content)
             article.ingestion_metadata = {
                 "scraper_name": self.name,
                 "validation_result": validation_result,

@@ -17,6 +17,7 @@ class DateParser:
         "%Y-%m-%d %H:%M:%S%z",  # ISO-like with space
         "%Y-%m-%d %H:%M:%S",  # ISO-like without timezone
         "%Y-%m-%d",  # Date only
+        "%Y%m%d",  # Compact date format (YYYYMMDD)
         "%a, %d %b %Y %H:%M:%S %z",  # RFC 822 (RSS standard)
         "%a, %d %b %Y %H:%M:%S %Z",  # RFC 822 with timezone name
         "%a, %d %b %Y %H:%M:%S",  # RFC 822 without timezone
@@ -53,6 +54,14 @@ class DateParser:
         if not date_str:
             return None
 
+        # Try email.utils.parsedate_to_datetime for RFC 2822/822 first (most common for RSS feeds)
+        try:
+            parsed = parsedate_to_datetime(date_str)
+            if parsed:
+                return cls._ensure_utc(parsed)
+        except Exception:
+            pass
+
         # Try our custom format parsing
         parsed_date = cls._parse_custom_formats(date_str)
         if parsed_date:
@@ -62,14 +71,6 @@ class DateParser:
         parsed_date = cls._extract_date_patterns(date_str)
         if parsed_date:
             return cls._ensure_utc(parsed_date)
-
-        # Fallback: try email.utils.parsedate_to_datetime for RFC 2822/822
-        try:
-            parsed = parsedate_to_datetime(date_str)
-            if parsed:
-                return cls._ensure_utc(parsed)
-        except Exception:
-            pass
 
         return None
 
@@ -166,6 +167,17 @@ class DateParser:
         # Date-only pattern (YYYY-MM-DD)
         date_pattern = r"(\d{4})-(\d{1,2})-(\d{1,2})"
         match = re.match(date_pattern, date_str)
+        if match:
+            try:
+                year, month, day = map(int, match.groups())
+                dt = datetime(year, month, day)
+                return cls._ensure_utc(dt)
+            except (ValueError, TypeError):
+                pass
+
+        # Compact date format (YYYYMMDD)
+        compact_pattern = r"(\d{4})(\d{2})(\d{2})"
+        match = re.match(compact_pattern, date_str)
         if match:
             try:
                 year, month, day = map(int, match.groups())

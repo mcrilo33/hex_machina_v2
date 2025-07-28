@@ -1,6 +1,7 @@
 """Generic report builder for pipeline operations (ingestion, enrichment, etc.)."""
 
 import json
+import logging
 from collections import Counter, defaultdict
 from typing import Any, List, Optional, Type
 
@@ -11,7 +12,6 @@ from src.hex_machina.reporting.chart_utils import (
     create_time_series_chart,
 )
 from src.hex_machina.storage.duckdb_adapter import DuckDBAdapter
-from src.hex_machina.utils.logging_utils import get_logger
 
 
 class ReportBuilder(BaseReportBuilder):
@@ -56,7 +56,7 @@ class ReportBuilder(BaseReportBuilder):
         Returns:
             Markdown string for the table section
         """
-        logger = get_logger(__name__)
+        logger = logging.getLogger(__name__)
 
         try:
             if not articles:
@@ -282,7 +282,7 @@ No valid domain data available.
         Returns:
             Operation object or None
         """
-        logger = get_logger(__name__)
+        logger = logging.getLogger(__name__)
 
         try:
             adapter = DuckDBAdapter(db_path=db_path)

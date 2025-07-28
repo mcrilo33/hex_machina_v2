@@ -7,9 +7,21 @@ class ScraperConfig(BaseModel):
     """Configuration for a single scraper."""
 
     type: Literal[
-        "playwright_rss_article_scraper", "stealth_playwright_rss_article_scraper"
+        "deepmind_google_scraper",
+        "hai_scraper",
+        "hbr_scraper",
+        "meta_scraper",
+        "microsoft_scraper",
+        "research_google_scraper",
+        "synced_review_scraper",
+        "playwright_html_article_scraper",
+        "playwright_rss_article_scraper",
+        "stealth_playwright_rss_article_scraper",
     ]
     start_urls: List[str]
+    articles_limit: Optional[int] = None
+    max_articles_per_page: Optional[int] = None
+    wait_for_js: Optional[int] = None
     browser_type: Optional[str] = None
     headless: Optional[bool] = None
     launch_args: Optional[List[str]] = None

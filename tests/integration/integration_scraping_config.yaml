@@ -27,9 +27,7 @@ scrapy:
   retry_http_codes: [500, 502, 503, 504, 408]  # Remove 429 to avoid rate limit detection
   
   # Cache Settings - Reduce load on target sites and improve performance
-  httpcache_enabled: true
-  httpcache_expiration_secs: 3600  # Cache for 1 hour
-  httpcache_dir: ".scrapy/httpcache"
+  httpcache_enabled: false
   
   # Cookie Settings - Maintain session state
   cookies_enabled: true
@@ -79,9 +77,7 @@ scrapy:
     DEPTH_PRIORITY: 0
     
     # DNS Settings - Conservative
-    DNSCACHE_ENABLED: true
-    DNSCACHE_SIZE: 1000  # Smaller cache
-    DNS_TIMEOUT: 30  # Shorter timeout
+    DNSCACHE_ENABLED: false
     
     # Additional Stealth Settings
     DOWNLOADER_MIDDLEWARES: {
@@ -91,7 +87,6 @@ scrapy:
       'scrapy.downloadermiddlewares.httpproxy.HttpProxyMiddleware': 750,
       'scrapy.downloadermiddlewares.httpcompression.HttpCompressionMiddleware': 810,
       'scrapy.downloadermiddlewares.cookies.CookiesMiddleware': 700,
-      'scrapy.downloadermiddlewares.httpcache.HttpCacheMiddleware': 900,
     }
     
     # Disable default user agent middleware to use custom one
@@ -113,6 +108,11 @@ scrapy:
     }
 
 scrapers:
+  - type: "deepmind_google_scraper"
+    start_urls:
+      - "tests/integration/data/research_google.html"
+    articles_limit: 2
+    max_articles_per_page: 2
   - type: "playwright_rss_article_scraper"
     start_urls:
       - "tests/integration/data/test_feed_1.xml"

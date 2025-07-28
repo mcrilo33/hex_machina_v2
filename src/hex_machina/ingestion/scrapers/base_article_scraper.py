@@ -6,10 +6,10 @@ from datetime import datetime
 from typing import List, Optional
 
 import scrapy
+from scrapy_playwright.page import PageMethod
 
 from src.hex_machina.ingestion.article_parser import ArticleParser
-from src.hex_machina.utils import DateParser
-from src.hex_machina.utils.logging_utils import get_logger
+from src.hex_machina.utils import DateParser, extract_markdown_from_html
 
 
 class BaseArticleScraper(scrapy.Spider, ABC):
@@ -31,7 +31,8 @@ class BaseArticleScraper(scrapy.Spider, ABC):
         """
         super().__init__(**kwargs)
         self.scraper_config = scraper_config
-        self._logger = get_logger(f"hex_machina.scraper.{self.name}")
+        # All scrapers inherit this logger
+        self._logger = logging.getLogger(f"hex_machina.scraper.{self.name}")
         self.start_urls = start_urls or []
         self.parser = ArticleParser()
 
@@ -59,7 +60,14 @@ class BaseArticleScraper(scrapy.Spider, ABC):
                 url=start_url,
                 callback=self.parse_start_url,
                 errback=self.handle_error,
-                meta={"feed_url": start_url},
+                meta={
+                    "feed_url": start_url,
+                    "playwright": True,
+                    "playwright_include_page": True,
+                    "playwright_page_methods": [
+                        PageMethod("wait_for_load_state", "networkidle"),
+                    ],
+                },
             )
 
     def _load_settings_from_scrapy(self):
@@ -180,3 +188,17 @@ class BaseArticleScraper(scrapy.Spider, ABC):
             error_status = "extract_error"
             error_message = str(e)
         return text_content, error_status, error_message
+
+    def get_text_content(self, html_content: str) -> Optional[str]:
+        """
+        Extract the main text content from the article page.
+        Gets all text content within the section.
+
+        Args:
+            response: Scrapy response object
+
+        Returns:
+            Extracted text content as a string, or None if not found
+        """
+        content_elements = extract_markdown_from_html(html_content)
+        return content_elements

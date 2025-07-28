@@ -1,11 +1,11 @@
 """Configuration loader for ingestion operations."""
 
+import logging
 from typing import Optional
 
 import yaml
 
 from src.hex_machina.ingestion.config_models import IngestionConfig
-from src.hex_machina.utils.logging_utils import get_logger
 
 
 class ConfigLoader:
@@ -18,7 +18,7 @@ class ConfigLoader:
             config_path: Path to the configuration file
         """
         self.config_path = config_path
-        self.logger = get_logger(__name__)
+        self.logger = logging.getLogger(__name__)
 
     def load(self) -> IngestionConfig:
         """Load and validate the configuration.
@@ -53,6 +53,6 @@ def load_ingestion_config(config_path: str) -> Optional[IngestionConfig]:
         loader = ConfigLoader(config_path)
         return loader.load()
     except Exception as e:
-        logger = get_logger(__name__)
+        logger = logging.getLogger(__name__)
         logger.error(f"Failed to load ingestion config: {e}")
         return None

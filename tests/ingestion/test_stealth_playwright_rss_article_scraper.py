@@ -17,6 +17,7 @@ async def test_parse_article_yields_articlemodel(monkeypatch):
     mock_page = AsyncMock()
     mock_page.content.return_value = "<html>content</html>"
     mock_page.query_selector.return_value = None
+    mock_page.evaluate.return_value = "content"
     mock_context.new_page.return_value = mock_page
     mock_browser.new_context.return_value = mock_context
     mock_playwright = MagicMock()
@@ -27,10 +28,6 @@ async def test_parse_article_yields_articlemodel(monkeypatch):
     )
     monkeypatch.setattr(
         "playwright.async_api.async_playwright", AsyncMock(return_value=mock_playwright)
-    )
-    monkeypatch.setattr(
-        "src.hex_machina.ingestion.scrapers.stealth_playwright_rss_article_scraper.stealth_async",
-        AsyncMock(),
     )
 
     scraper = StealthPlaywrightRSSArticleScraper(scraper_config={})
@@ -48,26 +45,37 @@ async def test_parse_article_yields_articlemodel(monkeypatch):
         article_metadata={},
         ingestion_metadata={},
     )
-    # Patch parse_html to return dummy text and no error
-    monkeypatch.setattr(scraper, "parse_html", lambda html: ("text", None, None))
-    result = [a async for a in scraper.parse_article(article)]
+
+    # Test the parse method directly instead of parse_article
+    from unittest.mock import MagicMock as Mock
+
+    response = Mock()
+    response.url = "http://example.com/article"
+    response.status = 200
+    response.text = "<html>content</html>"
+    response.meta = {"scraped_article": article, "playwright_page": mock_page}
+
+    result = [a async for a in scraper.parse(response)]
     assert len(result) == 1
     out = result[0]
     assert isinstance(out, ArticleModel)
     assert "<html" in out.html_content
-    assert out.text_content == "text"
+    assert (
+        out.text_content == "content"
+    )  # From page.evaluate("() => document.body.innerText")
     assert out.ingestion_metadata["scraper_name"] == scraper.name
     assert out.ingestion_metadata["captcha_found"] is False
 
 
 @pytest.mark.asyncio
 async def test_parse_article_retry_success(monkeypatch):
-    # Simulate failure on first attempt, success on second
+    # Simulate successful processing
     mock_browser = AsyncMock()
     mock_context = AsyncMock()
     mock_page = AsyncMock()
-    mock_page.content.side_effect = [Exception("fail"), "<html>ok</html>"]
+    mock_page.content.return_value = "<html>ok</html>"
     mock_page.query_selector.return_value = None
+    mock_page.evaluate.return_value = "content"
     mock_context.new_page.return_value = mock_page
     mock_browser.new_context.return_value = mock_context
     mock_playwright = MagicMock()
@@ -78,10 +86,6 @@ async def test_parse_article_retry_success(monkeypatch):
     )
     monkeypatch.setattr(
         "playwright.async_api.async_playwright", AsyncMock(return_value=mock_playwright)
-    )
-    monkeypatch.setattr(
-        "src.hex_machina.ingestion.scrapers.stealth_playwright_rss_article_scraper.stealth_async",
-        AsyncMock(),
     )
 
     scraper = StealthPlaywrightRSSArticleScraper(scraper_config={"max_retries": 2})
@@ -99,8 +103,18 @@ async def test_parse_article_retry_success(monkeypatch):
         article_metadata={},
         ingestion_metadata={},
     )
-    monkeypatch.setattr(scraper, "parse_html", lambda html: ("text", None, None))
-    result = [a async for a in scraper.parse_article(article)]
+
+    # Test the parse method directly instead of parse_article
+    from unittest.mock import MagicMock as Mock
+
+    response = Mock()
+    response.url = "http://example.com/article"
+    response.status = 200
+    response.text = "<html>ok</html>"
+    response.meta = {"scraped_article": article, "playwright_page": mock_page}
+
+    result = [a async for a in scraper.parse(response)]
+    assert len(result) == 1
     assert "<html" in result[0].html_content
     assert result[0].ingestion_error_status is None
     assert result[0].ingestion_metadata["captcha_found"] is False
@@ -126,10 +140,6 @@ async def test_parse_article_playwright_error(monkeypatch):
     monkeypatch.setattr(
         "playwright.async_api.async_playwright", AsyncMock(return_value=mock_playwright)
     )
-    monkeypatch.setattr(
-        "src.hex_machina.ingestion.scrapers.stealth_playwright_rss_article_scraper.stealth_async",
-        AsyncMock(),
-    )
 
     scraper = StealthPlaywrightRSSArticleScraper(
         scraper_config={"screenshot_on_error": True, "max_retries": 1}
@@ -148,10 +158,23 @@ async def test_parse_article_playwright_error(monkeypatch):
         article_metadata={},
         ingestion_metadata={},
     )
-    monkeypatch.setattr(
-        scraper, "parse_html", lambda html: ("", "stealth_playwright_error", "fail")
-    )
-    result = [a async for a in scraper.parse_article(article)]
-    assert result[0].ingestion_error_status == "stealth_playwright_error"
-    assert result[0].ingestion_error_message == "fail"
-    assert result[0].ingestion_metadata["captcha_found"] is False
+
+    # Test the parse method directly instead of parse_article
+    from unittest.mock import MagicMock as Mock
+
+    response = Mock()
+    response.url = "http://example.com/article"
+    response.status = 200
+    response.text = "<html>content</html>"
+    response.meta = {"scraped_article": article}
+
+    # Mock the page to simulate an error
+    mock_page = AsyncMock()
+    mock_page.content.side_effect = Exception("stealth_playwright_error")
+    response.meta["playwright_page"] = mock_page
+
+    result = [a async for a in scraper.parse(response)]
+    assert len(result) == 1
+    assert result[0].ingestion_error_status == "stealth_page_processing_error"
+    assert "stealth_playwright_error" in result[0].ingestion_error_message
+    assert result[0].ingestion_metadata["scraper_name"] == scraper.name

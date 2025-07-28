@@ -211,9 +211,6 @@ class ExtractionTester:
         print(f"trafilatura_ratio: {result['trafilatura_ratio']}")
         print(f"readability_ratio: {result['readability_ratio']}")
         print(f"main_extractor_ratio: {result['main_extractor_ratio']}")
-        import ipdb
-
-        ipdb.set_trace()
 
         return result
 

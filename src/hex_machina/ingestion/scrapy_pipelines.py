@@ -52,7 +52,7 @@ class ArticleStorePipeline:
         if html_length < 10000:
             return (
                 "HTML_TOO_SHORT",
-                f"HTML content too short: {html_length} characters (minimum: 10000)",
+                f"HTML content too short: {item.html_content} characters (minimum: 10000)",
             )
 
         # Validate text content length
@@ -77,15 +77,6 @@ class ArticleStorePipeline:
         """
         if not isinstance(item, ArticleModel):
             item = ArticleModel(**item)
-
-        # Check for existence by url_domain and title
-        existing = self.storage_manager._adapter.get_article_by_domain_and_title(
-            item.url_domain, item.title
-        )
-        if existing:
-            # Optionally, update the existing article instead of skipping
-            # self.storage_manager.update_article(existing)
-            return item  # Skip insertion if already exists
 
         # Validate content lengths and update error status
         error_status, error_message = self._validate_content_lengths(item)
@@ -114,6 +105,11 @@ class ArticleStorePipeline:
             ingestion_error_status=error_status,
             ingestion_error_message=error_message,
         )
-        # Store in DB
-        self.storage_manager.add_article(article)
+
+        # Store in DB - database will handle duplicate detection
+        result = self.storage_manager.add_article(article)
+        if result is None:
+            # Article already exists (duplicate detected by database constraint)
+            return item  # Skip insertion if already exists
+
         return item

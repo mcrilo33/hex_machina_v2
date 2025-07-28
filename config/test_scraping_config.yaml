@@ -4,7 +4,7 @@
 db_path: "storage/articles.db"
 articles_limit: 10  # Limit articles per scraper
 date_threshold: "2024-07-20"  # Only articles after this date
-log_level: "INFO"
+log_level: "DEBUG"
 
 scrapy:
   # Basic Settings - Stealth Focused
@@ -21,10 +21,10 @@ scrapy:
   download_timeout: 120  # Reasonable timeout
   download_maxsize: 10485760  # 10MB limit to prevent large downloads
   
-      # Retry Settings - Handle temporary failures and redirects
-    retry_enabled: true
-    retry_times: 3
-    retry_http_codes: [500, 502, 503, 504, 408, 301, 302, 307, 308]  # Include redirect codes
+  # Retry Settings - Handle temporary failures and redirects
+  retry_enabled: true
+  retry_times: 3
+  retry_http_codes: [500, 502, 503, 504, 408, 301, 302, 307, 308]  # Include redirect codes
   
   # Cache Settings - Reduce load on target sites and improve performance
   httpcache_enabled: true
@@ -84,6 +84,51 @@ scrapy:
     DNSCACHE_SIZE: 1000  # Smaller cache
     DNS_TIMEOUT: 30  # Shorter timeout
     
+    # Playwright Settings - Improve browser stability
+    PLAYWRIGHT_LAUNCH_OPTIONS: {
+      "headless": true,
+      "args": [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--disable-web-security",
+        "--disable-features=VizDisplayCompositor",
+        "--disable-extensions",
+        "--disable-plugins",
+        "--disable-background-timer-throttling",
+        "--disable-backgrounding-occluded-windows",
+        "--disable-renderer-backgrounding",
+        "--disable-field-trial-config",
+        "--disable-ipc-flooding-protection",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-default-apps",
+        "--disable-sync",
+        "--disable-translate",
+        "--hide-scrollbars",
+        "--mute-audio",
+        "--no-zygote",
+        "--disable-logging",
+        "--disable-background-networking",
+        "--disable-background-timer-throttling",
+        "--disable-client-side-phishing-detection",
+        "--disable-component-extensions-with-background-pages",
+        "--disable-domain-reliability",
+        "--disable-features=TranslateUI",
+      ]
+    }
+    PLAYWRIGHT_CONTEXTS: {
+      "default": {
+        "viewport": {"width": 1920, "height": 1080},
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "ignore_https_errors": true,
+        "java_script_enabled": true,
+      }
+    }
+    PLAYWRIGHT_DEFAULT_NAVIGATION_TIMEOUT: 30000  # 30 seconds
+    PLAYWRIGHT_DEFAULT_TIMEOUT: 30000  # 30 seconds
+    
     # Additional Stealth Settings
     DOWNLOADER_MIDDLEWARES: {
       'scrapy.downloadermiddlewares.useragent.UserAgentMiddleware': None,
@@ -115,68 +160,42 @@ scrapy:
     }
 
 scrapers:
-  - scraper_0:
-    type: playwright_rss_article_scraper
+  - type: playwright_rss_article_scraper
     start_urls:
       - "https://www.aws.amazon.com/rss"
       - "https://research.google/blog/rss/"
-
   - scraper_1:
     type: stealth_playwright_rss_article_scraper
     start_urls:
       - "https://www.kdnuggets.com/feed"
       - "https://www.techcrunch.com/feed"
-    browser_type: "chromium"
-    headless: true  # Stealth mode makes headless less detectable
-    launch_args:
-      - "--disable-blink-features=AutomationControlled"
-      - "--no-sandbox"
-      - "--disable-dev-shm-usage"
-      - "--disable-gpu"
-      - "--disable-web-security"
-      - "--disable-features=VizDisplayCompositor"
-      - "--disable-extensions"
-      - "--disable-plugins"
-      - "--disable-images"  # Reduce bandwidth and detection
-      - "--disable-javascript"  # For RSS feeds, JS not needed
-      - "--disable-background-timer-throttling"
-      - "--disable-backgrounding-occluded-windows"
-      - "--disable-renderer-backgrounding"
-      - "--disable-field-trial-config"
-      - "--disable-ipc-flooding-protection"
-      - "--no-first-run"
-      - "--no-default-browser-check"
-      - "--disable-default-apps"
-      - "--disable-sync"
-      - "--disable-translate"
-      - "--hide-scrollbars"
-      - "--mute-audio"
-      - "--no-zygote"
-      - "--disable-logging"
-      - "--disable-background-networking"
-      - "--disable-background-timer-throttling"
-      - "--disable-client-side-phishing-detection"
-      - "--disable-component-extensions-with-background-pages"
-      - "--disable-default-apps"
-      - "--disable-domain-reliability"
-      - "--disable-features=TranslateUI"
-      - "--disable-ipc-flooding-protection"
-      - "--no-first-run"
-      - "--no-default-browser-check"
-      - "--disable-default-apps"
-      - "--disable-sync"
-      - "--disable-translate"
-      - "--hide-scrollbars"
-      - "--mute-audio"
-      - "--no-zygote"
-      - "--disable-logging"
-      - "--disable-background-networking"
-      - "--disable-background-timer-throttling"
-      - "--disable-client-side-phishing-detection"
-      - "--disable-component-extensions-with-background-pages"
-      - "--disable-default-apps"
-      - "--disable-domain-reliability"
-      - "--disable-features=TranslateUI"
-      - "--disable-ipc-flooding-protection"
-    max_retries: 3
-    screenshot_on_error: false
+  - type: "hai_scraper"
+    start_urls:
+      - "https://hai.stanford.edu/news?filterBy=news"
+    articles_limit: 3
+    max_articles_per_page: 3
+  - type: "hbr_scraper"
+    start_urls:
+      - "https://hbr.org/the-latest"
+    articles_limit: 3
+    max_articles_per_page: 3
+  - type: "meta_scraper"
+    start_urls:
+      - "https://ai.meta.com/blog/"
+    articles_limit: 3
+    max_articles_per_page: 3
+  - type: "microsoft_scraper"
+    start_urls:
+      - "https://news.microsoft.com/source/view-all/?_categories=ai"
+    articles_limit: 4
+    max_articles_per_page: 4
+  - type: "research_google_scraper"
+    start_urls:
+      - "https://research.google/blog/"
+    articles_limit: 2
+    max_articles_per_page: 2
+  - type: "synced_review_scraper"
+    start_urls:
+      - "https://syncedreview.com"
+    articles_limit: 4
+    max_articles_per_page: 4

@@ -43,6 +43,8 @@ rich = "^14.1.0"
 trafilatura = "^2.0.0"
 readability-lxml = "^0.8.4.1"
 ipdb = "^0.13.13"
+twisted = {extras = ["asyncio"], version = "^25.5.0"}
+parsel = "^1.10.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.2"

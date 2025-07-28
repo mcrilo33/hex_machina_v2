@@ -7,7 +7,6 @@ import feedparser
 
 from src.hex_machina.ingestion.article_models import ArticleModel, RSSArticlePreview
 from src.hex_machina.ingestion.scrapers.base_article_scraper import BaseArticleScraper
-from src.hex_machina.utils.logging_utils import get_logger
 
 
 class RSSArticleScraper(BaseArticleScraper):
@@ -26,7 +25,7 @@ class RSSArticleScraper(BaseArticleScraper):
             start_urls: List of URLs to start scraping from.
         """
         super().__init__(scraper_config=scraper_config, start_urls=start_urls, **kwargs)
-        self._logger = get_logger(f"hex_machina.scraper.{self.name}")
+        # Logger is inherited from BaseArticleScraper
 
     @abstractmethod
     async def parse_article(self, article):

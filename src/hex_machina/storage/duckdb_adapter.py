@@ -4,6 +4,7 @@ import os
 from typing import List, Optional
 
 from sqlalchemy import create_engine
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 from src.hex_machina.storage.adapter import BaseDBAdapter
@@ -75,13 +76,25 @@ class DuckDBAdapter(BaseDBAdapter):
 
     # --- Article CRUD ---
 
-    def add_article(self, article: ArticleDB) -> ArticleDB:
-        """Add a new article to the database."""
+    def add_article(self, article: ArticleDB) -> Optional[ArticleDB]:
+        """Add a new article to the database.
+
+        Returns:
+            ArticleDB if successfully added, None if duplicate exists
+        """
         with self.SessionLocal() as session:
-            session.add(article)
-            session.commit()
-            session.refresh(article)
-            return article
+            try:
+                session.add(article)
+                session.commit()
+                session.refresh(article)
+                return article
+            except IntegrityError as e:
+                session.rollback()
+                if "uq_article_domain_title" in str(e):
+                    # Duplicate article - return None to indicate it already exists
+                    return None
+                # Re-raise other integrity errors
+                raise
 
     def get_article(self, article_id: int) -> Optional[ArticleDB]:
         """Retrieve an article by its ID."""
@@ -113,25 +126,6 @@ class DuckDBAdapter(BaseDBAdapter):
         """List all articles in the database."""
         with self.SessionLocal() as session:
             return session.query(ArticleDB).all()
-
-    def get_article_by_domain_and_title(
-        self, url_domain: str, title: str
-    ) -> Optional[ArticleDB]:
-        """Retrieve an article by its url_domain and title.
-
-        Args:
-            url_domain (str): The domain of the article URL.
-            title (str): The title of the article.
-
-        Returns:
-            Optional[ArticleDB]: The ORM object if found, else None.
-        """
-        with self.SessionLocal() as session:
-            return (
-                session.query(ArticleDB)
-                .filter_by(url_domain=url_domain, title=title)
-                .first()
-            )
 
     def count_articles_for_operation(self, ingestion_run_id: int) -> int:
         """Count the number of articles processed for a specific ingestion operation.

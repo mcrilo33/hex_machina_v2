@@ -1,6 +1,13 @@
-import datetime
+import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Any, List
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Suppress matplotlib font manager debug messages
+logging.getLogger("matplotlib.font_manager").setLevel(logging.WARNING)
 
 from src.hex_machina.reporting.base_report_generator import BaseReportGenerator
 from src.hex_machina.reporting.chart_utils import create_time_series_chart
@@ -46,9 +53,9 @@ class IngestionDomainEvaluationReportGenerator(BaseReportGenerator):
             sections, title=f"Ingestion Domain Evaluation Report - {self.domain}"
         )
 
-    def _get_operation_date(self, operations: List[Any]) -> datetime.datetime:
+    def _get_operation_date(self, operations: List[Any]) -> datetime:
         # For domain reports, we don't have operations, so use current time
-        return datetime.datetime.now()
+        return datetime.now()
 
     def _get_operation_id(self, operations: List[Any]) -> str:
         return self.domain
@@ -176,8 +183,6 @@ class IngestionDomainEvaluationReportGenerator(BaseReportGenerator):
             return "## Content Length Distributions\n\nNo content data available for this domain.\n\n"
 
         # Create bar plots for distributions
-        import matplotlib.pyplot as plt
-        import numpy as np
 
         charts = []
 

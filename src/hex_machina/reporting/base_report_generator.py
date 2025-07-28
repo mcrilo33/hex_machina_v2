@@ -1,6 +1,7 @@
 """Abstract base classes for report generation."""
 
 import datetime
+import logging
 import os
 import re
 from abc import ABC, abstractmethod
@@ -8,8 +9,6 @@ from pathlib import Path
 from typing import Any, List, Optional
 
 import markdown2
-
-from src.hex_machina.utils.logging_utils import get_logger
 
 
 class BaseReportGenerator(ABC):
@@ -23,7 +22,7 @@ class BaseReportGenerator(ABC):
             logger: Logger instance (optional)
         """
         self.output_dir = Path(output_dir)
-        self.logger = logger or get_logger(__name__)
+        self.logger = logger or logging.getLogger(__name__)
 
     def generate_report(
         self,
@@ -356,7 +355,7 @@ class BaseReportBuilder:
         Returns:
             Markdown string for the summary section
         """
-        logger = get_logger(__name__)
+        logger = logging.getLogger(__name__)
 
         try:
             # Extract fields with safe defaults

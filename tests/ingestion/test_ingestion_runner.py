@@ -52,6 +52,48 @@ def test_get_scraper_class_returns_correct_class():
     assert scraper_class == SCRAPER_CLASS_MAP["playwright_rss_article_scraper"]
 
 
+def test_get_scraper_class_returns_playwright_html_article_scraper():
+    config = make_config(["playwright_html_article_scraper"])
+    runner = IngestionRunner(config, DummyStorage(), crawler_process=MagicMock())
+    scraper_class = runner._get_scraper_class("playwright_html_article_scraper")
+    assert scraper_class == SCRAPER_CLASS_MAP["playwright_html_article_scraper"]
+
+
+def test_get_scraper_class_returns_deepmind_google_scraper():
+    config = make_config(["deepmind_google_scraper"])
+    runner = IngestionRunner(config, DummyStorage(), crawler_process=MagicMock())
+    scraper_class = runner._get_scraper_class("deepmind_google_scraper")
+    assert scraper_class == SCRAPER_CLASS_MAP["deepmind_google_scraper"]
+
+
+def test_get_scraper_class_returns_meta_scraper():
+    config = make_config(["meta_scraper"])
+    runner = IngestionRunner(config, DummyStorage(), crawler_process=MagicMock())
+    scraper_class = runner._get_scraper_class("meta_scraper")
+    assert scraper_class == SCRAPER_CLASS_MAP["meta_scraper"]
+
+
+def test_get_scraper_class_returns_microsoft_scraper():
+    config = make_config(["microsoft_scraper"])
+    runner = IngestionRunner(config, DummyStorage(), crawler_process=MagicMock())
+    scraper_class = runner._get_scraper_class("microsoft_scraper")
+    assert scraper_class == SCRAPER_CLASS_MAP["microsoft_scraper"]
+
+
+def test_get_scraper_class_returns_research_google_scraper():
+    config = make_config(["research_google_scraper"])
+    runner = IngestionRunner(config, DummyStorage(), crawler_process=MagicMock())
+    scraper_class = runner._get_scraper_class("research_google_scraper")
+    assert scraper_class == SCRAPER_CLASS_MAP["research_google_scraper"]
+
+
+def test_get_scraper_class_returns_synced_review_scraper():
+    config = make_config(["synced_review_scraper"])
+    runner = IngestionRunner(config, DummyStorage(), crawler_process=MagicMock())
+    scraper_class = runner._get_scraper_class("synced_review_scraper")
+    assert scraper_class == SCRAPER_CLASS_MAP["synced_review_scraper"]
+
+
 def test_build_spider_kwargs_includes_all_expected_fields():
     config = make_config(["playwright_rss_article_scraper"])
     runner = IngestionRunner(config, DummyStorage(), crawler_process=MagicMock())

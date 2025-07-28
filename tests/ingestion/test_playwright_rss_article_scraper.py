@@ -4,8 +4,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.hex_machina.ingestion.article_models import ArticleModel
+from src.hex_machina.ingestion.scrapers.playwright_mixin import USER_AGENTS
 from src.hex_machina.ingestion.scrapers.playwright_rss_article_scraper import (
-    USER_AGENTS,
     PlaywrightRSSArticleScraper,
 )
 
@@ -34,14 +34,16 @@ async def test_parse_article_yields_request():
     assert meta["scraped_article"] == article
     assert meta["playwright"] is True
     assert meta["playwright_include_page"] is True
-    assert "User-Agent" in meta["headers"]
-    assert meta["headers"]["User-Agent"] in USER_AGENTS
+    assert "User-Agent" in req.headers
+    # Handle both string and bytes User-Agent headers
+    user_agent = req.headers["User-Agent"]
+    if isinstance(user_agent, bytes):
+        user_agent = user_agent.decode("utf-8")
+    assert user_agent in USER_AGENTS
     # Check for presence of stealth scripts and human-like actions
     page_methods = meta["playwright_page_methods"]
     assert any(pm.method == "evaluate" for pm in page_methods)
     assert any(pm.method == "add_init_script" for pm in page_methods)
-    assert any(pm.method == "mouse.move" for pm in page_methods)
-    assert any(pm.method == "wait_for_selector" for pm in page_methods)
     assert any(pm.method == "wait_for_load_state" for pm in page_methods)
 
 
@@ -65,12 +67,16 @@ def make_article():
 def make_failure(
     article=None, url="http://example.com/article", status=500, message="fail"
 ):
+    request = MagicMock()
+    request.url = url
+    request.meta = {"scraped_article": article} if article else {}
     response = MagicMock()
     response.url = url
     response.status = status
     response.meta = {"scraped_article": article} if article else {}
     failure = MagicMock()
     failure.value = Exception(message)
+    failure.request = request
     failure.response = response
     return failure
 
@@ -88,11 +94,11 @@ async def test_handle_error_yields_article():
     scraper = PlaywrightRSSArticleScraper(scraper_config={})
     article = make_article()
     failure = make_failure(article=article, message="fail")
-    result = [a async for a in scraper.handle_error(failure)]
+    result = await scraper.handle_playwright_error(failure)
     assert len(result) == 1
-    err_article = result[0]
+    err_article = result[0]  # Get the first (and only) article from the list
     assert err_article.url == failure.response.url
-    assert err_article.ingestion_error_status == str(failure.response.status)
+    assert err_article.ingestion_error_status == str(failure.type)
     assert err_article.ingestion_error_message
     assert err_article.ingestion_metadata["scraper_name"] == scraper.name
 
@@ -107,7 +113,7 @@ async def test_parse_yields_article():
     assert len(result) == 1
     parsed_article = result[0]
     assert parsed_article.html_content == "<html>content</html>"
-    assert parsed_article.text_content == "text"
+    assert parsed_article.text_content == "content"
     assert parsed_article.ingestion_metadata["scraper_name"] == scraper.name
 
 

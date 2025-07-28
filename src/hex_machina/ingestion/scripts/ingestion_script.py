@@ -1,6 +1,7 @@
 """Main ingestion script for Hex Machina v2."""
 
 import argparse
+import logging
 from pathlib import Path
 
 from src.hex_machina.ingestion.article_models import ArticleModel
@@ -10,10 +11,8 @@ from src.hex_machina.ingestion.ingestion_report import (
 )
 from src.hex_machina.ingestion.ingestion_runner import IngestionRunner
 from src.hex_machina.storage.manager import StorageManager
-from src.hex_machina.utils.logging_utils import get_logger
 
-# Configure logging
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def convert_articledb_to_articlemodel(article_db) -> ArticleModel:

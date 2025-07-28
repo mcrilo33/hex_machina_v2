@@ -7,6 +7,7 @@ from sqlalchemy import (
     Sequence,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 
@@ -80,6 +81,10 @@ class ArticleDB(Base):
     ingestion_operation = relationship(IngestionOperationDB, back_populates="articles")
     enrichments = relationship(
         "EnrichmentDB", back_populates="article", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        UniqueConstraint("url_domain", "title", name="uq_article_domain_title"),
     )
 
 

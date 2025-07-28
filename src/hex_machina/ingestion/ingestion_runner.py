@@ -1,18 +1,35 @@
+import logging
+
 from scrapy.crawler import CrawlerProcess
 from scrapy.utils.project import get_project_settings
 
 from src.hex_machina.ingestion.config_models import IngestionConfig
 from src.hex_machina.ingestion.scrapers import (
+    DeepMindGoogleScraper,
+    HAIScraper,
+    HBRScraper,
+    MetaScraper,
+    MicrosoftScraper,
+    PlaywrightHtmlArticleScraper,
     PlaywrightRSSArticleScraper,
+    ResearchGoogleScraper,
     StealthPlaywrightRSSArticleScraper,
     # Add other scrapers as needed
+    SyncedReviewScraper,
 )
-from src.hex_machina.utils.logging_utils import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 SCRAPER_CLASS_MAP = {
+    "deepmind_google_scraper": DeepMindGoogleScraper,
+    "hai_scraper": HAIScraper,
+    "hbr_scraper": HBRScraper,
+    "meta_scraper": MetaScraper,
+    "microsoft_scraper": MicrosoftScraper,
+    "playwright_html_article_scraper": PlaywrightHtmlArticleScraper,
     "playwright_rss_article_scraper": PlaywrightRSSArticleScraper,
+    "research_google_scraper": ResearchGoogleScraper,
+    "synced_review_scraper": SyncedReviewScraper,
     "stealth_playwright_rss_article_scraper": StealthPlaywrightRSSArticleScraper,
     # Add other mappings as needed
 }
@@ -102,6 +119,34 @@ class IngestionRunner:
             logger.info(
                 f"Setting ingestion date threshold to: {self.config.date_threshold}"
             )
+
+        # Always enable Playwright for all scrapers
+        settings.set(
+            "TWISTED_REACTOR", "twisted.internet.asyncioreactor.AsyncioSelectorReactor"
+        )
+        settings.set(
+            "DOWNLOAD_HANDLERS",
+            {
+                "http": "scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler",
+                "https": "scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler",
+            },
+        )
+        settings.set(
+            "PLAYWRIGHT_LAUNCH_OPTIONS",
+            {
+                "headless": True,
+                "args": [
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-accelerated-2d-canvas",
+                    "--no-first-run",
+                    "--no-zygote",
+                    "--disable-gpu",
+                ],
+            },
+        )
+        settings.set("PLAYWRIGHT_INCLUDE_PAGE", True)
 
         # Set pipelines and middlewares
         self._configure_pipelines_and_middlewares(settings)

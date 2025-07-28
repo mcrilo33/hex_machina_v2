@@ -1,11 +1,11 @@
 """Script to remove the last or a specific IngestionOperation and its articles from the DB."""
 
 import argparse
+import logging
 
 from src.hex_machina.storage.manager import StorageManager
-from src.hex_machina.utils.logging_utils import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def remove_ingestion_operation(db_path: str, op_id: int = None) -> None:
