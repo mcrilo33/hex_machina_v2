@@ -7,75 +7,68 @@ from typing import Dict, List, Tuple
 class ContentValidator:
     """Validates HTML content for blocked pages, anti-bot detection, and invalid responses."""
 
-    # Anti-bot detection patterns
+    # Anti-bot detection patterns - More specific with word boundaries and limited distance
     ANTI_BOT_PATTERNS = [
-        # CAPTCHA patterns
-        r"captcha",
-        r"recaptcha",
-        r"prove.*human",
-        r"verify.*human",
-        r"human.*verification",
-        r"robot.*check",
-        r"bot.*detection",
-        # Block patterns
-        r"access.*denied",
-        r"forbidden",
-        r"blocked",
-        r"restricted",
-        r"unauthorized",
-        r"not.*authorized",
-        # Rate limiting patterns
-        r"too.*many.*requests",
-        r"rate.*limit",
-        r"request.*limit",
-        r"please.*wait",
-        r"try.*again.*later",
-        # Geographic blocks
-        r"not.*available.*region",
-        r"geographic.*restriction",
-        r"content.*unavailable",
-        r"region.*blocked",
-        # Maintenance patterns
-        r"under.*maintenance",
-        r"temporarily.*unavailable",
-        r"service.*unavailable",
-        r"down.*for.*maintenance",
-        # Cloudflare and CDN blocks
-        r"cloudflare",
-        r"checking.*browser",
-        r"ddos.*protection",
-        r"security.*check",
-        # JavaScript challenges
-        r"javascript.*required",
-        r"enable.*javascript",
-        r"browser.*check",
-        r"security.*verification",
+        # CAPTCHA patterns - specific phrases and HTML attributes
+        r"\bcaptcha\s+required\b",
+        r"\brecaptcha\s+required\b",
+        r'class\s*=\s*["\'][^"\']*captcha[^"\']*["\']',  # captcha in class attributes
+        r'id\s*=\s*["\'][^"\']*captcha[^"\']*["\']',  # captcha in id attributes
+        r'<[^>]*class\s*=\s*["\'][^"\']*captcha[^"\']*["\'][^>]*>',  # captcha in any HTML tag class
+        r"\bprove\s+you\s+are\s+human\b",
+        r"\bverify\s+you\s+are\s+human\b",
+        r"\bhuman\s+verification\s+required\b",
+        r"\brobot\s+check\s+required\b",
+        r"\bbot\s+detection\s+page\b",
+        # Block patterns - specific phrases
+        r"\baccess\s+denied.*?\bbot\b",
+        r"\bforbidden.*?\bbot\b",
+        r"\bblocked.*?\bbot\b",
+        r"\brestricted.*?\bbot\b",
+        r"\bunauthorized.*?\bbot\b",
+        r"\bnot\s+authorized.*?\bbot\b",
+        # Rate limiting patterns - specific phrases
+        r"\btoo\s+many\s+requests\b",
+        r"\brate\s+limit\s+exceeded\b",
+        r"\brequest\s+limit\s+exceeded\b",
+        r"\bplease\s+wait\s+before\s+making\s+more\s+requests\b",
+        r"\bplease\s+wait\s+\d+\s+seconds\b",
+        r"\btry\s+again\s+later.*?\brate\s+limit\b",
+        # Geographic blocks - specific phrases
+        r"\bnot\s+available\s+in\s+your\s+region\b",
+        r"\bgeographic\s+restriction\s+applies\b",
+        r"\bcontent\s+blocked\s+in\s+your\s+country\b",
+        # JavaScript requirements - specific phrases
+        r"\bjavascript\s+required\s+to\s+access\s+this\s+page\b",
+        r"\benable\s+javascript\s+to\s+continue\b",
+        r"\bjavascript\s+must\s+be\s+enabled\b",
+        # Security checks - specific phrases
+        r"\bsecurity\s+check\s+required\s+for\s+your\s+browser\b",
+        r"\bbrowser\s+security\s+check\s+failed\b",
+        r"\bplease\s+complete\s+security\s+check\b",
+        # Suspicious activity - specific phrases
+        r"\bsuspicious\s+activity\s+detected\b",
+        r"\bunusual\s+traffic\s+detected\b",
+        r"\bautomated\s+access\s+detected\b",
+        r"\bbot\s+activity\s+detected\b",
+        # Error page patterns - specific phrases
+        r"\bpage\s+not\s+found\b",
+        r"\bthe\s+page\s+you\s+are\s+looking\s+for\s+does\s+not\s+exist\b",
     ]
 
-    # Empty content patterns
+    # Empty content patterns - more specific
     EMPTY_CONTENT_PATTERNS = [
         r"<html>\s*<body>\s*</body>\s*</html>",
         r"<html>\s*<head>\s*</head>\s*<body>\s*</body>\s*</html>",
         r"<html>\s*</html>",
     ]
 
-    # Error page patterns
-    ERROR_PAGE_PATTERNS = [
-        r"page.*not.*found",
-        r"404.*error",
-        r"error.*404",
-        r"page.*does.*not.*exist",
-        r"content.*not.*found",
-        r"article.*not.*found",
-        r"post.*not.*found",
-    ]
-
-    # Suspicious redirect patterns
+    # Suspicious redirect patterns - more specific
     REDIRECT_PATTERNS = [
         r"window\.location",
         r"location\.href",
-        r"meta.*refresh",
-        r"redirect",
+        r"meta.*?refresh",
+        r"\bredirect\b",
     ]
 
     def __init__(self):
@@ -85,9 +78,6 @@ class ContentValidator:
         )
         self.empty_content_regex = re.compile(
             "|".join(self.EMPTY_CONTENT_PATTERNS), re.IGNORECASE | re.DOTALL
-        )
-        self.error_page_regex = re.compile(
-            "|".join(self.ERROR_PAGE_PATTERNS), re.IGNORECASE
         )
         self.redirect_regex = re.compile(
             "|".join(self.REDIRECT_PATTERNS), re.IGNORECASE
@@ -133,14 +123,6 @@ class ContentValidator:
             validation_result["is_valid"] = False
             validation_result["issues"].append("Empty or minimal HTML content")
 
-        # Check for error pages
-        error_matches = self.error_page_regex.findall(html_content)
-        if error_matches:
-            validation_result["is_valid"] = False
-            validation_result["issues"].append(
-                f"Error page detected: {', '.join(set(error_matches))}"
-            )
-
         # Check for suspicious redirects
         redirect_matches = self.redirect_regex.findall(html_content)
         if redirect_matches:
@@ -166,37 +148,68 @@ class ContentValidator:
         """Check for specific blocking indicators."""
         indicators = []
 
-        # Check for Cloudflare-style challenges
+        # Check for Cloudflare-style challenges - more specific
         if (
             "cloudflare" in html_content.lower()
             and "checking your browser" in html_content.lower()
         ):
             indicators.append("Cloudflare DDoS protection detected")
 
-        # Check for JavaScript challenges
-        if "javascript" in html_content.lower() and "enable" in html_content.lower():
+        # Check for JavaScript challenges - more specific
+        if (
+            "javascript" in html_content.lower()
+            and "enable" in html_content.lower()
+            and any(
+                phrase in html_content.lower()
+                for phrase in [
+                    "enable javascript",
+                    "javascript required",
+                    "javascript must be enabled",
+                ]
+            )
+        ):
             indicators.append("JavaScript challenge detected")
 
-        # Check for suspicious title patterns
+        # Check for suspicious title patterns - more specific
         title_match = re.search(r"<title>(.*?)</title>", html_content, re.IGNORECASE)
         if title_match:
             title = title_match.group(1).lower()
-            if any(
-                pattern in title
-                for pattern in ["blocked", "forbidden", "denied", "captcha"]
-            ):
-                indicators.append(f"Suspicious page title: {title_match.group(1)}")
+            # Only flag if the entire title is suspicious, not just contains words
+            suspicious_titles = [
+                "access denied",
+                "forbidden",
+                "blocked",
+                "captcha required",
+                "bot detected",
+                "unauthorized",
+                "not found",
+            ]
+            if any(suspicious in title for suspicious in suspicious_titles):
+                # Add "error" to the message if it's an error-related title
+                if any(
+                    error_word in title
+                    for error_word in ["error", "not found", "404", "500", "403", "401"]
+                ):
+                    indicators.append(f"Error page detected: {title_match.group(1)}")
+                else:
+                    indicators.append(f"Suspicious page title: {title_match.group(1)}")
 
-        # Check for suspicious meta descriptions
+        # Check for suspicious meta descriptions - more specific
         meta_match = re.search(
             r'<meta.*?name="description".*?content="(.*?)"', html_content, re.IGNORECASE
         )
         if meta_match:
             description = meta_match.group(1).lower()
-            if any(
-                pattern in description
-                for pattern in ["blocked", "forbidden", "denied", "captcha"]
-            ):
+            # Only flag if the description is clearly about blocking
+            blocking_phrases = [
+                "access denied",
+                "forbidden",
+                "blocked",
+                "captcha required",
+                "bot detected",
+                "unauthorized",
+            ]
+            if any(phrase in description for phrase in blocking_phrases):
                 indicators.append(f"Suspicious meta description: {meta_match.group(1)}")
 
         return indicators

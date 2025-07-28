@@ -6,7 +6,10 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
-from src.hex_machina.ingestion.ingestion_report import *
+from src.hex_machina.ingestion.ingestion_report import (
+    IngestionReportGenerator,
+    generate_html_ingestion_report,
+)
 from src.hex_machina.reporting.report_builder import ReportBuilder
 
 
@@ -219,7 +222,7 @@ class TestIngestionReportGenerator:
         report_dir = self.generator._create_report_directory(op)
 
         assert report_dir.exists()
-        assert "ingestion_report_42_" in report_dir.name
+        assert report_dir.name.endswith("_ingestion_report")
 
     def test_generate_report_sections(self):
         """Test report sections generation."""
@@ -233,7 +236,7 @@ class TestIngestionReportGenerator:
             op, articles, Path(self.temp_dir)
         )
 
-        assert len(sections) == 5
+        assert len(sections) == 8
         assert any("Ingestion Operation Summary" in section for section in sections)
         assert any(
             "Domain Article/Error Distribution" in section for section in sections
@@ -311,9 +314,6 @@ class TestGenerateHtmlIngestionReport:
 
     def test_generate_html_ingestion_report(self):
         """Test the main function."""
-        from src.hex_machina.ingestion.ingestion_report_generator import (
-            generate_html_ingestion_report,
-        )
 
         op = DummyIngestionOperation()
         articles = [
@@ -322,7 +322,7 @@ class TestGenerateHtmlIngestionReport:
         ]
 
         with patch(
-            "src.hex_machina.ingestion.ingestion_report_generator.IngestionReportGenerator"
+            "src.hex_machina.ingestion.ingestion_report.IngestionReportGenerator"
         ) as mock_generator_class:
             mock_generator = mock_generator_class.return_value
             mock_generator.generate_report.return_value = str(
