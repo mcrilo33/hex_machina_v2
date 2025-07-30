@@ -254,6 +254,11 @@ class ScrapyHtmlArticleScraper(BaseArticleScraper):
 
             # Extract article fields
             article = self._extract_article_fields(article, html_content)
+            if not self.check_published_date(article.published_date):
+                self._logger.debug(
+                    f"Skipping old article: '{article.title}' from {article.url}"
+                )
+                return
 
             self._logger.info(
                 f"Successfully processed article: {article.title} (Size: {len(html_content)} chars)"
