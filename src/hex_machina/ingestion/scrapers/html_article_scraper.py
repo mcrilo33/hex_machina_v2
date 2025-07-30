@@ -1,20 +1,21 @@
-"""Playwright HTML article scraper for Hex Machina v2."""
+"""HTML article scraper for Hex Machina v2."""
 
 from abc import abstractmethod
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 
+import scrapy
 from parsel import Selector
 
 from src.hex_machina.ingestion.article_models import ArticleModel
-from src.hex_machina.ingestion.content_validator import create_content_validator
 from src.hex_machina.ingestion.scrapers.base_article_scraper import BaseArticleScraper
-from src.hex_machina.ingestion.scrapers.playwright_mixin import PlaywrightMixin
 from src.hex_machina.utils.date_parser import DateParser
 
 
-class PlaywrightHtmlArticleScraper(BaseArticleScraper, PlaywrightMixin):
-    """Playwright HTML scraper that handles HTML page parsing logic with Playwright."""
+class ScrapyHtmlArticleScraper(BaseArticleScraper):
+    """Scrapy HTML scraper that handles HTML page parsing logic with pure Scrapy."""
+
+    name = "scrapy_html_article_scraper"
 
     def __init__(
         self,
@@ -22,7 +23,7 @@ class PlaywrightHtmlArticleScraper(BaseArticleScraper, PlaywrightMixin):
         start_urls: Optional[List[str]] = None,
         **kwargs,
     ):
-        """Initialize the PlaywrightHtmlArticleScraper.
+        """Initialize the ScrapyHtmlArticleScraper.
 
         Args:
             scraper_config: The configuration object for this scraper (from parent).
@@ -31,13 +32,10 @@ class PlaywrightHtmlArticleScraper(BaseArticleScraper, PlaywrightMixin):
         BaseArticleScraper.__init__(
             self, scraper_config=scraper_config, start_urls=start_urls, **kwargs
         )
-        PlaywrightMixin.__init__(self)
         # Logger is inherited from BaseArticleScraper
-        self.content_validator = create_content_validator()
         self.start_urls = start_urls
 
         # Configuration for HTML scraping
-        self.wait_for_js = scraper_config.get("wait_for_js", 2000)
         self.max_articles_per_page = scraper_config.get("max_articles_per_page", 6)
         self.articles_limit = scraper_config.get("articles_limit")
         self.articles_parsed = 0
@@ -111,16 +109,31 @@ class PlaywrightHtmlArticleScraper(BaseArticleScraper, PlaywrightMixin):
         if not self.articles_limit or self.articles_parsed < self.articles_limit:
             return False
 
-        return True  # True
+        return True
 
-    def _extract_article_fields(self, article, html_content):
+    def _extract_article_fields(
+        self, article: ArticleModel, html_content: str
+    ) -> ArticleModel:
+        """Extract article fields from HTML content.
+
+        Args:
+            article: Article model to populate
+            html_content: HTML content to parse
+
+        Returns:
+            Populated ArticleModel
+        """
         selector = Selector(text=html_content)
+
+        # Extract title
         title = self.get_title(selector)
         if not title:
             article.ingestion_error_status = "title_not_found"
             article.ingestion_error_message = "Title not found"
             title = "fake_title_" + str(datetime.now())
         article.title = title
+
+        # Extract published date
         published_date = self.get_published_date(selector)
         published_date = DateParser.parse_date(published_date)
         if not published_date:
@@ -128,14 +141,19 @@ class PlaywrightHtmlArticleScraper(BaseArticleScraper, PlaywrightMixin):
             article.ingestion_error_message = "Published date not found"
             published_date = datetime.now()
         article.published_date = published_date
-        text_content = self.get_text_content(selector.get())
+
+        # Extract text content
+        text_content = self.get_text_content(html_content)
         if not text_content:
             article.ingestion_error_status = "text_content_not_found"
             article.ingestion_error_message = "Text content not found"
             text_content = ""
         article.text_content = text_content
+
+        # Extract author
         author = self.get_author(selector)
         article.author = author
+
         article = ArticleModel.model_validate(article)
         return article
 
@@ -174,20 +192,25 @@ class PlaywrightHtmlArticleScraper(BaseArticleScraper, PlaywrightMixin):
                 if self.limit_is_reached():
                     break
 
-                # Create Playwright request using the mixin
-                request = await self.create_playwright_request(
+                # Create Scrapy request
+                request = scrapy.Request(
                     url=link,
                     callback=self.parse_article,
-                    errback=self.handle_playwright_error,
-                    use_advanced_stealth=False,
+                    errback=self.handle_error,
+                    headers=self.get_default_headers("article"),
+                    meta={
+                        "dont_cache": True,  # Don't cache article requests
+                        "dont_retry": False,  # Allow retries
+                    },
+                    dont_filter=True,
                 )
 
                 yield request
                 self.articles_parsed += 1
-                self._logger.info(f"Parsed article: {link}")
+                self._logger.info(f"Scheduled article: {link}")
 
-    async def parse_article(self, response) -> ArticleModel:
-        """Parse individual article page content with Playwright.
+    async def parse_article(self, response: scrapy.http.Response) -> Any:
+        """Parse individual article page content with Scrapy.
 
         Args:
             response: Scrapy response object
@@ -195,102 +218,22 @@ class PlaywrightHtmlArticleScraper(BaseArticleScraper, PlaywrightMixin):
         Returns:
             ArticleModel with extracted content
         """
-        page = response.meta.get("playwright_page")
-        if page:
-            try:
-                # Check if page is still open before proceeding
-                if page.is_closed():
-                    self._logger.warning(f"Page already closed for {response.url}")
-                    return
+        # Log the response status for monitoring
+        self._logger.info(
+            f"Processing article from {response.url} with status code: {response.status}"
+        )
 
-                html_content = await page.content()
-                is_valid, validation_result = self.content_validator.validate_content(
-                    html_content=html_content,
-                    url=response.url,
-                    status_code=response.status,
-                )
-                article = ArticleModel(
-                    source_url=self.start_urls[0],
-                    url=response.url,
-                    url_domain=self.parser.parse_url_domain(response.url),
-                    html_content=html_content,
-                    text_content="",
-                    published_date=datetime.now(),
-                    author="",
-                    title="",
-                    article_metadata={},
-                    ingestion_metadata={
-                        "scraper_name": self.name,
-                        "validation_result": validation_result,
-                    },
-                )
-                self._logger.info(
-                    f"Content validation for {response.url}: {validation_result}"
-                )
-                if not is_valid:
-                    article.ingestion_error_status = "content_blocked"
-                    article.ingestion_error_message = f"Content validation failed: {', '.join(validation_result['issues'])}"
-                    self._logger.warning(
-                        f"Blocked content detected for {article.title}: {validation_result['issues']}"
-                    )
-                    yield article
-
-                captcha_selectors = [
-                    ".captcha",
-                    ".recaptcha",
-                    ".g-recaptcha",
-                    "[data-sitekey]",
-                ]
-                captcha_found = False
-                for selector in captcha_selectors:
-                    try:
-                        if page.is_closed():
-                            break
-                        element = await page.query_selector(selector)
-                        if element:
-                            captcha_found = True
-                            break
-                    except Exception:
-                        continue
-
-                if captcha_found:
-                    self._logger.warning(
-                        f"CAPTCHA detected for article: {article.title}"
-                    )
-                    article.ingestion_error_status = "captcha_detected"
-                    article.ingestion_error_message = "CAPTCHA detected"
-                    article.ingestion_metadata["captcha_found"] = True
-
-                article = self._extract_article_fields(article, html_content)
-
-                self._logger.info(f"Successfully processed article: {response.url}")
-                article.model_rebuild()
+        try:
+            # Handle different HTTP status codes
+            if response.status != 200:
+                article = await self._handle_non_200_response(response)
                 yield article
-            except Exception as e:
-                error_msg = str(e)
-                if "Target page, context or browser has been closed" in error_msg:
-                    self._logger.warning(
-                        f"Browser closed while processing {response.url}: {error_msg}"
-                    )
-                else:
-                    self._logger.error(
-                        f"Error processing page content for {response.url}: {error_msg}"
-                    )
                 return
-            finally:
-                try:
-                    if page and not page.is_closed():
-                        await page.close()
-                except Exception as e:
-                    self._logger.debug(
-                        f"Error closing page for {response.url}: {str(e)}"
-                    )
-        else:
-            self._logger.warning(
-                f"Playwright page not available for {response.url}. Using fallback HTML content."
-            )
+
+            # Get HTML content from Scrapy response
             html_content = response.text
-            html_content = html_content if isinstance(html_content, str) else ""
+
+            # Create article model
             article = ArticleModel(
                 source_url=self.start_urls[0],
                 url=response.url,
@@ -301,9 +244,214 @@ class PlaywrightHtmlArticleScraper(BaseArticleScraper, PlaywrightMixin):
                 author="",
                 title="",
                 article_metadata={},
-                ingestion_metadata={"scraper_name": self.name},
+                ingestion_metadata={
+                    "scraper_name": self.name,
+                    "blocking_found": False,
+                    "response_size": len(html_content),
+                    "status_code": response.status,
+                },
             )
-            article.ingestion_error_status = "playwright_blocked"
-            article.ingestion_error_message = "Playwright blocked"
+
+            # Extract article fields
             article = self._extract_article_fields(article, html_content)
-            yield article
+
+            self._logger.info(
+                f"Successfully processed article: {article.title} (Size: {len(html_content)} chars)"
+            )
+
+        except Exception as e:
+            self._logger.error(
+                f"Error processing response content for {response.url}: {str(e)}"
+            )
+            article = ArticleModel(
+                source_url=self.start_urls[0],
+                url=response.url,
+                url_domain=self.parser.parse_url_domain(response.url),
+                html_content=response.text,
+                text_content="",
+                published_date=datetime.now(),
+                author="",
+                title="",
+                article_metadata={},
+                ingestion_metadata={
+                    "scraper_name": self.name,
+                    "error": str(e),
+                    "status_code": response.status,
+                },
+            )
+            article.ingestion_error_status = "response_processing_error"
+            article.ingestion_error_message = str(e)
+
+        yield article
+
+    async def _handle_non_200_response(
+        self, response: scrapy.http.Response
+    ) -> ArticleModel:
+        """
+        Handle non-200 HTTP responses gracefully.
+
+        Args:
+            response: The Scrapy response object
+
+        Returns:
+            ArticleModel with error information
+        """
+        status_code = response.status
+        html_content = response.text
+
+        # Map status codes to meaningful error messages
+        status_messages = {
+            403: "Forbidden - Access denied by server",
+            404: "Not Found - Article URL is broken or expired",
+            429: "Too Many Requests - Rate limited by server",
+            500: "Internal Server Error - Server-side issue",
+            502: "Bad Gateway - Server communication error",
+            503: "Service Unavailable - Server temporarily unavailable",
+            504: "Gateway Timeout - Server timeout",
+        }
+
+        error_message = status_messages.get(
+            status_code, f"HTTP {status_code} - Unknown error"
+        )
+
+        # Set appropriate error status based on status code
+        if status_code in [403, 429]:
+            error_status = "access_denied"
+        elif status_code == 404:
+            error_status = "not_found"
+        elif status_code in [500, 502, 503, 504]:
+            error_status = "server_error"
+        else:
+            error_status = f"http_error_{status_code}"
+
+        # Create article with error information
+        article = ArticleModel(
+            source_url=self.start_urls[0],
+            url=response.url,
+            url_domain=self.parser.parse_url_domain(response.url),
+            html_content=html_content,
+            text_content=self.get_text_content(html_content),
+            published_date=datetime.now(),
+            author="",
+            title="",
+            article_metadata={},
+            ingestion_metadata={
+                "scraper_name": self.name,
+                "status_code": status_code,
+                "response_size": len(html_content),
+                "error_type": "http_error",
+            },
+        )
+
+        article.ingestion_error_status = error_status
+        article.ingestion_error_message = error_message
+
+        # Log the error with context
+        self._logger.warning(
+            f"HTTP {status_code} for article {response.url}: {error_message}"
+        )
+
+        return article
+
+    async def handle_error(self, failure: Any) -> Any:
+        """
+        Handle request errors and extract error information for Scrapy-based scrapers.
+
+        Args:
+            failure: Scrapy failure object
+
+        Returns:
+            List containing the updated article if present, otherwise empty list.
+        """
+        request = failure.request
+
+        error_info = {
+            "url": request.url,
+            "error_type": str(failure.type),
+            "error_message": str(failure.value),
+        }
+
+        # Handle specific error types
+        if "DNSLookupError" in error_info["error_type"]:
+            self._logger.warning(
+                f"DNS lookup failed for {error_info['url']}: {error_info['error_message']}"
+            )
+        elif "TimeoutError" in error_info["error_type"]:
+            self._logger.warning(
+                f"Request timeout for {error_info['url']}: {error_info['error_message']}"
+            )
+        elif "HttpError" in error_info["error_type"]:
+            self._logger.warning(
+                f"HTTP error for {error_info['url']}: {error_info['error_message']}"
+            )
+        else:
+            self._logger.error(
+                f"Error processing article {error_info['url']}: {error_info['error_message']}"
+            )
+
+        # Create article with error information
+        article = ArticleModel(
+            source_url=self.start_urls[0],
+            url=request.url,
+            url_domain=self.parser.parse_url_domain(request.url),
+            html_content="",
+            text_content="",
+            published_date=datetime.now(),
+            author="",
+            title="",
+            article_metadata={},
+            ingestion_metadata={
+                "scraper_name": self.name,
+                "error": error_info,
+            },
+        )
+
+        article.ingestion_error_status = str(failure.type)
+        article.ingestion_error_message = error_info["error_message"]
+
+        return [article]
+
+    def get_default_headers(self, content_type: str = "article") -> dict:
+        """
+        Get default headers for different content types.
+
+        Args:
+            content_type: Type of content being requested ("rss", "html", "article")
+
+        Returns:
+            Dictionary of headers appropriate for the content type
+        """
+        base_headers = {
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate",  # No Brotli to avoid dependency issues
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+            "Sec-Ch-Ua-Mobile": "?0",
+            "Sec-Ch-Ua-Platform": '"macOS"',
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-User": "?1",
+            "Upgrade-Insecure-Requests": "1",
+            "DNT": "1",
+            "Connection": "keep-alive",
+        }
+
+        if content_type == "rss":
+            base_headers["Accept"] = (
+                "application/rss+xml, application/xml, text/xml, */*"
+            )
+        elif content_type == "html":
+            base_headers["Accept"] = (
+                "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
+            )
+        elif content_type == "article":
+            base_headers["Accept"] = (
+                "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
+            )
+        else:
+            base_headers["Accept"] = "*/*"
+
+        return base_headers

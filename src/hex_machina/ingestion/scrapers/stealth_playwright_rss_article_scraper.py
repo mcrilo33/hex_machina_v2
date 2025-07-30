@@ -1,18 +1,15 @@
-"""Stealth Playwright RSS article scraper with advanced anti-detection features."""
+"""Stealth Playwright RSS article scraper for Hex Machina v2."""
 
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 import scrapy
 
 from src.hex_machina.ingestion.article_models import ArticleModel
-from src.hex_machina.ingestion.content_validator import create_content_validator
 from src.hex_machina.ingestion.scrapers.playwright_mixin import PlaywrightMixin
-from src.hex_machina.ingestion.scrapers.playwright_rss_article_scraper import (
-    PlaywrightRSSArticleScraper,
-)
+from src.hex_machina.ingestion.scrapers.rss_article_scraper import RSSArticleScraper
 
 
-class StealthPlaywrightRSSArticleScraper(PlaywrightRSSArticleScraper, PlaywrightMixin):
+class StealthPlaywrightRSSArticleScraper(RSSArticleScraper, PlaywrightMixin):
     """Advanced stealth scraper with retry logic and enhanced anti-detection."""
 
     name = "stealth_playwright_rss_article_scraper"
@@ -29,7 +26,6 @@ class StealthPlaywrightRSSArticleScraper(PlaywrightRSSArticleScraper, Playwright
             **kwargs,
         )
         # Logger is inherited from BaseArticleScraper
-        self.content_validator = create_content_validator()
         self.captcha_found = False
 
     async def parse_article(self, article: ArticleModel) -> Any:
@@ -45,7 +41,7 @@ class StealthPlaywrightRSSArticleScraper(PlaywrightRSSArticleScraper, Playwright
 
         yield request
 
-    async def handle_error(self, failure: Any) -> Dict[str, Any]:
+    async def handle_error(self, failure: Any) -> Any:
         """Handle request errors with enhanced logging."""
         request = failure.request
         article = request.meta.get("scraped_article")
@@ -86,34 +82,6 @@ class StealthPlaywrightRSSArticleScraper(PlaywrightRSSArticleScraper, Playwright
                 # Get the full HTML content
                 html_content = await page.content()
 
-                # Enhanced content validation for stealth scenarios
-                is_valid, validation_result = self.content_validator.validate_content(
-                    html_content=html_content,
-                    url=response.url,
-                    status_code=response.status,
-                )
-
-                # Log validation results
-                validation_summary = self.content_validator.extract_validation_summary(
-                    validation_result
-                )
-                self._logger.info(
-                    f"Stealth content validation for {article.title}: {validation_summary}"
-                )
-
-                # If content is blocked or invalid, mark as error
-                if not is_valid:
-                    article.ingestion_error_status = "content_blocked"
-                    article.ingestion_error_message = f"Stealth content validation failed: {', '.join(validation_result['issues'])}"
-                    article.ingestion_metadata = {
-                        "scraper_name": self.name,
-                        "validation_result": validation_result,
-                    }
-                    self._logger.warning(
-                        f"Stealth blocked content detected for {article.title}: {validation_result['issues']}"
-                    )
-                    return
-
                 # Enhanced captcha detection
                 captcha_selectors = [
                     ".captcha",
@@ -142,7 +110,6 @@ class StealthPlaywrightRSSArticleScraper(PlaywrightRSSArticleScraper, Playwright
                     article.ingestion_metadata = {
                         "scraper_name": self.name,
                         "captcha_found": True,
-                        "validation_result": validation_result,
                     }
                 else:
                     # Additional stealth checks
@@ -160,7 +127,6 @@ class StealthPlaywrightRSSArticleScraper(PlaywrightRSSArticleScraper, Playwright
                     article.ingestion_metadata = {
                         "scraper_name": self.name,
                         "captcha_found": False,
-                        "validation_result": validation_result,
                         "suspicious_elements": len(suspicious_elements),
                     }
 
@@ -184,28 +150,10 @@ class StealthPlaywrightRSSArticleScraper(PlaywrightRSSArticleScraper, Playwright
             # Fallback to regular Scrapy response
             html_content = response.text
 
-            # Validate the content
-            is_valid, validation_result = self.content_validator.validate_content(
-                html_content=html_content, url=response.url, status_code=response.status
-            )
-
-            if not is_valid:
-                article.ingestion_error_status = "content_blocked"
-                article.ingestion_error_message = f"Stealth content validation failed: {', '.join(validation_result['issues'])}"
-                article.ingestion_metadata = {
-                    "scraper_name": self.name,
-                    "validation_result": validation_result,
-                }
-                self._logger.warning(
-                    f"Stealth blocked content detected for {article.title}: {validation_result['issues']}"
-                )
-                return
-
             article.html_content = html_content
             article.text_content = self.get_text_content(html_content)
             article.ingestion_metadata = {
                 "scraper_name": self.name,
-                "validation_result": validation_result,
             }
 
             self._logger.info(

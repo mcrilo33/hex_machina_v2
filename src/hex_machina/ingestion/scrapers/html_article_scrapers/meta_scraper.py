@@ -4,12 +4,12 @@ from datetime import datetime
 from typing import List, Optional
 
 from src.hex_machina.ingestion.scrapers.html_article_scraper import (
-    PlaywrightHtmlArticleScraper,
+    ScrapyHtmlArticleScraper,
 )
 
 
-class MetaScraper(PlaywrightHtmlArticleScraper):
-    """Scraper for Meta AI blog articles using PlaywrightHtmlArticleScraper base."""
+class MetaScraper(ScrapyHtmlArticleScraper):
+    """Scraper for Meta AI blog articles using ScrapyHtmlArticleScraper base."""
 
     name = "meta_scraper"
 

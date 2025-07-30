@@ -4,7 +4,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.hex_machina.ingestion.article_models import ArticleModel
-from src.hex_machina.ingestion.scrapers.playwright_mixin import USER_AGENTS
 from src.hex_machina.ingestion.scrapers.playwright_rss_article_scraper import (
     PlaywrightRSSArticleScraper,
 )
@@ -34,16 +33,10 @@ async def test_parse_article_yields_request():
     assert meta["scraped_article"] == article
     assert meta["playwright"] is True
     assert meta["playwright_include_page"] is True
-    assert "User-Agent" in req.headers
-    # Handle both string and bytes User-Agent headers
-    user_agent = req.headers["User-Agent"]
-    if isinstance(user_agent, bytes):
-        user_agent = user_agent.decode("utf-8")
-    assert user_agent in USER_AGENTS
+    # User-Agent is no longer set in headers to let browser use default
+    # The browser will use its default user agent instead
     # Check for presence of stealth scripts and human-like actions
     page_methods = meta["playwright_page_methods"]
-    assert any(pm.method == "evaluate" for pm in page_methods)
-    assert any(pm.method == "add_init_script" for pm in page_methods)
     assert any(pm.method == "wait_for_load_state" for pm in page_methods)
 
 

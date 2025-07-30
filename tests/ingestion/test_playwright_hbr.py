@@ -51,9 +51,6 @@ class HBRTestSpider(scrapy.Spider):
 
             # Get the page content
             html_content = await page.content()
-            import ipdb
-
-            ipdb.set_trace()
             self.logger.info(f"✅ Page content length: {len(html_content)} characters")
 
             # Check if we can find the title

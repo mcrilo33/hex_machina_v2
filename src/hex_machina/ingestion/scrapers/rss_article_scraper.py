@@ -47,7 +47,15 @@ class RSSArticleScraper(BaseArticleScraper):
         """
         feed_url = response.meta.get("feed_url", response.url)
         self._logger.info(f"Parsing RSS feed: {feed_url}")
-        self._logger.info(f"Scraper config: {self.scraper_config}")
+        self._logger.info(f"Final response URL: {response.url}")
+        self._logger.info(f"Response status: {response.status}")
+        self._logger.info(f"Response content length: {len(response.text)}")
+
+        # Log redirect information if available
+        if response.meta.get("redirect_urls"):
+            self._logger.info(f"Redirect history: {response.meta['redirect_urls']}")
+        if response.meta.get("redirect_times"):
+            self._logger.info(f"Redirect count: {response.meta['redirect_times']}")
 
         try:
             # Parse RSS feed from response text

@@ -21,6 +21,7 @@ def make_response(text, url="http://example.com/feed.xml"):
             self.text = text
             self.url = url
             self.meta = {}
+            self.status = 200  # Default status code
 
     return Response(text, url)
 
@@ -80,9 +81,8 @@ async def test_parse_start_url_skips_old_articles():
       </item>
     </channel></rss>"""
     scraper = DummyRSSScraper(
-        scraper_config={},
+        scraper_config={"date_threshold": datetime.now().isoformat()},
         start_urls=["http://example.com/feed.xml"],
-        limit_date=datetime.now(),
     )
     response = make_response(feed_xml)
     with patch("feedparser.parse", return_value=feedparser.parse(feed_xml)):

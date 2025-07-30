@@ -1,4 +1,7 @@
 import logging
+import signal
+import sys
+from typing import Any, Dict
 
 from scrapy.crawler import CrawlerProcess
 from scrapy.utils.project import get_project_settings
@@ -10,9 +13,11 @@ from src.hex_machina.ingestion.scrapers import (
     HBRScraper,
     MetaScraper,
     MicrosoftScraper,
-    PlaywrightHtmlArticleScraper,
     PlaywrightRSSArticleScraper,
     ResearchGoogleScraper,
+    ScrapyRSSArticleScraper,
+    SimplePlaywrightRSSArticleScraper,
+    StandalonePlaywrightRSSArticleScraper,
     StealthPlaywrightRSSArticleScraper,
     # Add other scrapers as needed
     SyncedReviewScraper,
@@ -26,13 +31,103 @@ SCRAPER_CLASS_MAP = {
     "hbr_scraper": HBRScraper,
     "meta_scraper": MetaScraper,
     "microsoft_scraper": MicrosoftScraper,
-    "playwright_html_article_scraper": PlaywrightHtmlArticleScraper,
     "playwright_rss_article_scraper": PlaywrightRSSArticleScraper,
     "research_google_scraper": ResearchGoogleScraper,
     "synced_review_scraper": SyncedReviewScraper,
     "stealth_playwright_rss_article_scraper": StealthPlaywrightRSSArticleScraper,
+    "scrapy_rss_article_scraper": ScrapyRSSArticleScraper,
+    "simple_playwright_rss_article_scraper": SimplePlaywrightRSSArticleScraper,
+    "standalone_playwright_rss_article_scraper": StandalonePlaywrightRSSArticleScraper,
     # Add other mappings as needed
 }
+
+
+async def custom_scraping_headers(
+    *,
+    browser_type_name: str,
+    playwright_request: Any,  # playwright.async_api.Request
+    scrapy_request_data: dict,
+) -> Dict[str, str]:
+    """
+    Custom header processing function for meaningful scraping headers.
+
+    This function enhances Playwright's default headers with scraping-specific
+    headers while maintaining browser-like behavior for better stealth.
+
+    Args:
+        browser_type_name: The type of browser (chromium, firefox, webkit)
+        playwright_request: The Playwright request object
+        scrapy_request_data: Scrapy request data containing method, url, headers, body, encoding
+
+    Returns:
+        Dictionary of headers to override
+    """
+    # Get Playwright's default headers
+    headers = await playwright_request.all_headers()
+
+    # Get Scrapy headers
+    scrapy_headers = scrapy_request_data["headers"].to_unicode_dict()
+
+    # Enhanced headers for better scraping
+    enhanced_headers = {
+        # Essential headers for web scraping
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+        "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"macOS"',
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
+        "DNT": "1",  # Do Not Track
+    }
+
+    # Preserve important Scrapy headers if present
+    if "Cookie" in scrapy_headers:
+        enhanced_headers["Cookie"] = scrapy_headers["Cookie"]
+
+    if "Referer" in scrapy_headers:
+        enhanced_headers["Referer"] = scrapy_headers["Referer"]
+
+    # Add browser-specific headers
+    if browser_type_name == "chromium":
+        enhanced_headers.update(
+            {
+                "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+                "Sec-Ch-Ua-Mobile": "?0",
+                "Sec-Ch-Ua-Platform": '"macOS"',
+            }
+        )
+    elif browser_type_name == "firefox":
+        enhanced_headers.update(
+            {
+                "Sec-Ch-Ua": '"Mozilla";v="5.0", "Firefox";v="120"',
+                "Sec-Ch-Ua-Mobile": "?0",
+                "Sec-Ch-Ua-Platform": '"macOS"',
+            }
+        )
+    elif browser_type_name == "webkit":
+        enhanced_headers.update(
+            {
+                "Sec-Ch-Ua": '"Safari";v="17.0"',
+                "Sec-Ch-Ua-Mobile": "?0",
+                "Sec-Ch-Ua-Platform": '"macOS"',
+            }
+        )
+
+    # Merge with Playwright's default headers, giving priority to our enhanced headers
+    final_headers = {**headers, **enhanced_headers}
+
+    # Log headers for debugging (only in DEBUG mode)
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"Generated headers for {browser_type_name}: {final_headers}")
+
+    return final_headers
 
 
 class IngestionRunner:
@@ -42,6 +137,27 @@ class IngestionRunner:
         self.config = config
         self.storage_manager = storage_manager
         self.crawler_process = crawler_process or CrawlerProcess(self._build_settings())
+        self._original_signal_handlers = {}
+
+    def _signal_handler(self, signum, frame):
+        """Handle shutdown signals gracefully."""
+        logger.info(f"Received signal {signum}, shutting down gracefully...")
+        if hasattr(self.crawler_process, "stop"):
+            self.crawler_process.stop()
+        sys.exit(0)
+
+    def _setup_signal_handlers(self):
+        """Setup signal handlers for graceful shutdown."""
+        signals = [signal.SIGINT, signal.SIGTERM]
+        for sig in signals:
+            self._original_signal_handlers[sig] = signal.signal(
+                sig, self._signal_handler
+            )
+
+    def _restore_signal_handlers(self):
+        """Restore original signal handlers."""
+        for sig, handler in self._original_signal_handlers.items():
+            signal.signal(sig, handler)
 
     def _build_settings(self):
         """Build comprehensive Scrapy settings from configuration."""
@@ -53,7 +169,7 @@ class IngestionRunner:
         # Map config fields to Scrapy settings
         setting_mappings = {
             # Basic Settings
-            "user_agent": "USER_AGENT",
+            "user_agent": "USER_AGENT",  # Will be set to None for Playwright
             "robotstxt_obey": "ROBOTSTXT_OBEY",
             # Performance Settings
             "concurrent_requests": "CONCURRENT_REQUESTS",
@@ -95,7 +211,16 @@ class IngestionRunner:
         # Apply mapped settings
         for config_key, setting_key in setting_mappings.items():
             if config_key in scrapy_config and scrapy_config[config_key] is not None:
-                settings.set(setting_key, scrapy_config[config_key])
+                # Special handling for user_agent when using Playwright
+                if config_key == "user_agent":
+                    # Set Scrapy user agent to None to let Playwright use browser default
+                    # This prevents conflicts between Scrapy and Playwright user agents
+                    settings.set(setting_key, None)
+                    logger.info(
+                        "Setting Scrapy USER_AGENT to None to let Playwright use browser default"
+                    )
+                else:
+                    settings.set(setting_key, scrapy_config[config_key])
 
         # Apply custom settings if provided
         if scrapy_config.get("custom_settings"):
@@ -109,15 +234,15 @@ class IngestionRunner:
         # Set ingestion-specific settings
         settings.set("INGESTION_RUN_ID", self._generate_run_id())
 
-        # Set articles limit and date threshold as Scrapy settings
+        # Set articles limit as Scrapy setting
         if self.config.articles_limit is not None:
             settings.set("CLOSESPIDER_ITEMCOUNT", self.config.articles_limit)
             logger.info(f"Setting Scrapy item limit to: {self.config.articles_limit}")
 
+        # Date threshold will be passed directly to scrapers via scraper_config
         if self.config.date_threshold is not None:
-            settings.set("INGESTION_DATE_THRESHOLD", self.config.date_threshold)
             logger.info(
-                f"Setting ingestion date threshold to: {self.config.date_threshold}"
+                f"Date threshold will be passed to scrapers: {self.config.date_threshold}"
             )
 
         # Always enable Playwright for all scrapers
@@ -131,25 +256,137 @@ class IngestionRunner:
                 "https": "scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler",
             },
         )
+
+        # Add settings for proper cleanup and shutdown
+        settings.set("CLOSESPIDER_TIMEOUT", 0)  # Close immediately when no more items
+        settings.set("CLOSESPIDER_PAGECOUNT", 0)  # Don't close based on page count
+        settings.set("CLOSESPIDER_ERRORCOUNT", 0)  # Don't close based on error count
+        settings.set("DOWNLOAD_TIMEOUT", 30)  # 30 second timeout for downloads
+        settings.set("DOWNLOAD_MAXSIZE", 0)  # No size limit
+        settings.set("DOWNLOAD_WARNSIZE", 0)  # No warning size
+        settings.set("DOWNLOAD_FAIL_ON_DATALOSS", False)  # Don't fail on data loss
+
+        # Configure Playwright launch options
+        default_playwright_options = {
+            "headless": True,
+            "timeout": 30000,  # 30 seconds timeout for browser launch
+            "args": [
+                # Security and sandbox args
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-accelerated-2d-canvas",
+                # Performance optimization
+                "--no-first-run",
+                "--no-zygote",
+                "--disable-gpu",
+                "--disable-background-timer-throttling",
+                "--disable-backgrounding-occluded-windows",
+                "--disable-renderer-backgrounding",
+                "--disable-field-trial-config",
+                "--disable-ipc-flooding-protection",
+                # Stealth and anti-detection
+                "--disable-blink-features=AutomationControlled",
+                "--disable-web-security",
+                "--disable-features=VizDisplayCompositor",
+                "--disable-extensions",
+                "--disable-plugins",
+                "--no-default-browser-check",
+                "--disable-default-apps",
+                "--disable-sync",
+                "--disable-translate",
+                "--hide-scrollbars",
+                "--mute-audio",
+                "--disable-logging",
+                "--disable-background-networking",
+                "--disable-client-side-phishing-detection",
+                "--disable-component-extensions-with-background-pages",
+                "--disable-domain-reliability",
+                "--disable-features=TranslateUI",
+                # Additional stealth args
+                "--disable-background-media-suspend",
+                "--disable-features=TranslateUI,BlinkGenPropertyTrees",
+                "--disable-features=AudioServiceOutOfProcess",
+                # Memory optimization
+                "--memory-pressure-off",
+                "--max_old_space_size=4096",
+            ],
+            # Additional launch options for better performance and stealth
+            "ignore_default_args": ["--enable-automation"],  # Hide automation flag
+        }
+
+        # Use configured options if provided, otherwise use defaults
+        playwright_options = (
+            self.config.scrapy.playwright_launch_options or default_playwright_options
+        )
+        settings.set("PLAYWRIGHT_LAUNCH_OPTIONS", playwright_options)
+        settings.set("PLAYWRIGHT_INCLUDE_PAGE", True)
+
+        # Additional scrapy-playwright settings
+        settings.set("PLAYWRIGHT_DEFAULT_NAVIGATION_TIMEOUT", 5000)  # 30 seconds
+        settings.set("PLAYWRIGHT_DEFAULT_TIMEOUT", 5000)  # 30 seconds
+        settings.set("PLAYWRIGHT_HEADLESS", True)  # Default to headless mode
         settings.set(
-            "PLAYWRIGHT_LAUNCH_OPTIONS",
+            "PLAYWRIGHT_RESTART_DISCONNECTED_BROWSER",
+            self.config.scrapy.restart_disconnected_browser,
+        )  # Restart browser if disconnected
+        # Use custom header processing function for meaningful scraping headers
+        settings.set(
+            "PLAYWRIGHT_PROCESS_REQUEST_HEADERS",
+            custom_scraping_headers,
+        )  # Use custom headers for better scraping
+        settings.set("PLAYWRIGHT_LAUNCH_OPTIONS", playwright_options)
+
+        # Memory usage extension for Playwright (replaces default Scrapy extension)
+        settings.set(
+            "EXTENSIONS",
             {
-                "headless": True,
-                "args": [
-                    "--no-sandbox",
-                    "--disable-setuid-sandbox",
-                    "--disable-dev-shm-usage",
-                    "--disable-accelerated-2d-canvas",
-                    "--no-first-run",
-                    "--no-zygote",
-                    "--disable-gpu",
-                ],
+                "scrapy.extensions.memusage.MemoryUsage": None,  # Disable default
+                "scrapy_playwright.memusage.ScrapyPlaywrightMemoryUsageExtension": 0,  # Enable Playwright-aware extension
             },
         )
-        settings.set("PLAYWRIGHT_INCLUDE_PAGE", True)
 
         # Set pipelines and middlewares
         self._configure_pipelines_and_middlewares(settings)
+
+        # Scrapy settings
+        settings.set("LOG_LEVEL", "INFO")  # Reduce verbosity
+        settings.set("USER_AGENT", self.config.scrapy.user_agent)
+        settings.set("DOWNLOAD_DELAY", 1)  # 1 second delay between requests
+        settings.set("RANDOMIZE_DOWNLOAD_DELAY", 0.5)  # Randomize delay by ±0.5 seconds
+        settings.set("CONCURRENT_REQUESTS", 16)  # Limit concurrent requests
+        settings.set("CONCURRENT_REQUESTS_PER_DOMAIN", 8)  # Limit per domain
+        settings.set("AUTOTHROTTLE_ENABLED", True)  # Enable auto-throttling
+        settings.set("AUTOTHROTTLE_START_DELAY", 1)  # Start with 1 second delay
+        settings.set("AUTOTHROTTLE_MAX_DELAY", 60)  # Max 60 seconds delay
+        settings.set(
+            "AUTOTHROTTLE_TARGET_CONCURRENCY", 1.0
+        )  # Target 1 request per second
+        settings.set("AUTOTHROTTLE_DEBUG", False)  # Disable debug output
+
+        # HTTP Error Handling - Allow non-200 responses to be processed
+        settings.set("HTTPERROR_ALLOWED_CODES", [403, 404, 429, 500, 502, 503, 504])
+        settings.set(
+            "HTTPERROR_ALLOW_ALL", True
+        )  # Allow all status codes to be processed
+
+        # Retry Configuration
+        settings.set("RETRY_ENABLED", True)
+        settings.set("RETRY_TIMES", 3)  # Retry failed requests 3 times
+        settings.set(
+            "RETRY_HTTP_CODES", [500, 502, 503, 504, 408, 429]
+        )  # Retry on server errors and rate limits
+        settings.set("RETRY_PRIORITY_ADJUST", -1)  # Lower priority for retries
+
+        # Download Timeouts
+        settings.set("DOWNLOAD_TIMEOUT", 30)  # 30 seconds timeout
+        settings.set("DOWNLOAD_MAXSIZE", 0)  # No size limit
+        settings.set("DOWNLOAD_WARNSIZE", 0)  # No warning size
+
+        # Cache and Duplicate Filtering
+        settings.set("DUPEFILTER_ENABLED", True)
+        settings.set("DUPEFILTER_DEBUG", False)
+        settings.set("HTTPCACHE_ENABLED", False)  # Disable caching for fresh content
 
         return settings
 
@@ -169,9 +406,6 @@ class IngestionRunner:
             "scrapy.downloadermiddlewares.defaultheaders.DefaultHeadersMiddleware"
         ] = 400
 
-        # Random user agent middleware (order 400)
-        middlewares["scrapy_user_agents.middlewares.RandomUserAgentMiddleware"] = 400
-
         # Download timeout middleware (order 350)
         middlewares[
             "scrapy.downloadermiddlewares.downloadtimeout.DownloadTimeoutMiddleware"
@@ -180,6 +414,12 @@ class IngestionRunner:
         # Retry middleware (order 550)
         if self.config.scrapy.retry_enabled:
             middlewares["scrapy.downloadermiddlewares.retry.RetryMiddleware"] = 550
+
+        middlewares["scrapy.downloadermiddlewares.redirect.RedirectMiddleware"] = 600
+        middlewares["scrapy.downloadermiddlewares.httpproxy.HttpProxyMiddleware"] = 750
+        middlewares[
+            "src.hex_machina.ingestion.middleware.RedirectLoggingMiddleware"
+        ] = 950  # Log redirects
 
         # Cookies middleware (order 700)
         if self.config.scrapy.cookies_enabled:
@@ -192,7 +432,7 @@ class IngestionRunner:
             ] = 810
 
         # HTTP cache middleware (order 900)
-        if self.config.scrapy.httpcache_enabled:
+        if False and self.config.scrapy.httpcache_enabled:
             middlewares[
                 "scrapy.downloadermiddlewares.httpcache.HttpCacheMiddleware"
             ] = 900
@@ -238,9 +478,14 @@ class IngestionRunner:
             else:
                 processed_urls.append(url)
 
+        # Create scraper config with date threshold included
+        scraper_config = scraper_cfg.model_dump()
+        if self.config.date_threshold is not None:
+            scraper_config["date_threshold"] = self.config.date_threshold
+
         kwargs = {
             "start_urls": processed_urls,
-            "scraper_config": scraper_cfg.model_dump(),
+            "scraper_config": scraper_config,
         }
 
         return kwargs
@@ -289,6 +534,9 @@ class IngestionRunner:
         logger.info(f"Starting ingestion run: {run_id} (DB ID: {ingestion_run_id})")
         summary["start_time"] = self._get_current_timestamp()
 
+        # Setup signal handlers for graceful shutdown
+        self._setup_signal_handlers()
+
         try:
             for scraper_cfg in self.config.scrapers:
                 scraper_class = self._get_scraper_class(scraper_cfg.type)
@@ -306,6 +554,8 @@ class IngestionRunner:
 
             if summary["crawlers_run"] > 0:
                 self.crawler_process.start()
+                # Explicitly stop the crawler process after completion
+                self.crawler_process.stop()
             else:
                 logger.warning("No valid scrapers to run")
 
@@ -317,6 +567,9 @@ class IngestionRunner:
             saved_op.end_time = datetime.now()
             self.storage_manager.update_ingestion_operation(saved_op)
         finally:
+            # Restore original signal handlers
+            self._restore_signal_handlers()
+
             summary["end_time"] = self._get_current_timestamp()
 
             # Count articles and errors for this operation

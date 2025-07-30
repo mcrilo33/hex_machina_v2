@@ -5,7 +5,6 @@ from typing import Any, Optional
 import scrapy
 
 from src.hex_machina.ingestion.article_models import ArticleModel
-from src.hex_machina.ingestion.content_validator import create_content_validator
 from src.hex_machina.ingestion.scrapers.playwright_mixin import PlaywrightMixin
 from src.hex_machina.ingestion.scrapers.rss_article_scraper import RSSArticleScraper
 
@@ -29,7 +28,6 @@ class PlaywrightRSSArticleScraper(RSSArticleScraper, PlaywrightMixin):
         )
         PlaywrightMixin.__init__(self)
         # Logger is inherited from BaseArticleScraper
-        self.content_validator = create_content_validator()
 
     async def parse_article(self, article: ArticleModel) -> Any:
         """Schedule a Scrapy request to parse the article content with Playwright.
@@ -53,6 +51,7 @@ class PlaywrightRSSArticleScraper(RSSArticleScraper, PlaywrightMixin):
 
     async def parse(self, response: scrapy.http.Response) -> Any:
         """Parse the article content and validate it."""
+
         article = response.meta.get("scraped_article")
         if not article:
             self._logger.error("No article found in response meta")
@@ -64,35 +63,9 @@ class PlaywrightRSSArticleScraper(RSSArticleScraper, PlaywrightMixin):
             try:
                 # Get the full HTML content
                 html_content = await page.content()
-
                 # Validate the content for blocking/anti-bot detection
-                is_valid, validation_result = self.content_validator.validate_content(
-                    html_content=html_content,
-                    url=response.url,
-                    status_code=response.status,
-                )
-
                 # Log validation results
-                validation_summary = self.content_validator.extract_validation_summary(
-                    validation_result
-                )
-                self._logger.info(
-                    f"Content validation for {article.title}: {validation_summary}"
-                )
-
                 # If content is blocked or invalid, mark as error
-                if not is_valid:
-                    article.ingestion_error_status = "content_blocked"
-                    article.ingestion_error_message = f"Content validation failed: {', '.join(validation_result['issues'])}"
-                    article.ingestion_metadata = {
-                        "scraper_name": self.name,
-                        "validation_result": validation_result,
-                    }
-                    self._logger.warning(
-                        f"Blocked content detected for {article.title}: {validation_result['issues']}"
-                    )
-                    yield article
-
                 # Check for captcha detection
                 captcha_selectors = [
                     ".captcha",
@@ -119,7 +92,6 @@ class PlaywrightRSSArticleScraper(RSSArticleScraper, PlaywrightMixin):
                     article.ingestion_metadata = {
                         "scraper_name": self.name,
                         "captcha_found": True,
-                        "validation_result": validation_result,
                     }
                 else:
                     # Update article with content
@@ -128,7 +100,6 @@ class PlaywrightRSSArticleScraper(RSSArticleScraper, PlaywrightMixin):
                     article.ingestion_metadata = {
                         "scraper_name": self.name,
                         "captcha_found": False,
-                        "validation_result": validation_result,
                     }
 
                     self._logger.info(
@@ -154,15 +125,10 @@ class PlaywrightRSSArticleScraper(RSSArticleScraper, PlaywrightMixin):
             html_content = response.text
 
             # Validate the content
-            is_valid, validation_result = self.content_validator.validate_content(
-                html_content=html_content, url=response.url, status_code=response.status
-            )
-
             article.html_content = html_content
             article.text_content = self.get_text_content(html_content)
             article.ingestion_metadata = {
                 "scraper_name": self.name,
-                "validation_result": validation_result,
             }
 
             self._logger.info(f"Successfully processed article: {article.title}")

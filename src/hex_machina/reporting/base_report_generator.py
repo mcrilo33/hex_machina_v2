@@ -398,6 +398,18 @@ class BaseReportBuilder:
                 success_count = num_items - num_errors
                 success_rate = f"{(success_count / num_items) * 100:.1f}%"
 
+            # Extract specific parameters for display
+            articles_limit = "-"
+            date_threshold = "-"
+            try:
+                import json
+
+                params_dict = json.loads(parameters)
+                articles_limit = params_dict.get("articles_limit", "-")
+                date_threshold = params_dict.get("date_threshold", "-")
+            except (json.JSONDecodeError, TypeError):
+                pass
+
             # Render as Markdown
             markdown = f"""
 ## {process_type} Operation Summary
@@ -413,6 +425,8 @@ class BaseReportBuilder:
 | **Errors** | {num_errors:,} |
 | **Success Rate** | {success_rate} |
 | **Estimated Time per Item** | {time_per_item} |
+| **Articles Limit** | {articles_limit} |
+| **Date Threshold** | {date_threshold} |
 | **Parameters** | `{parameters}` |
 
 """

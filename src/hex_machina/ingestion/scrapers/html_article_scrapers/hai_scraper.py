@@ -6,12 +6,12 @@ from typing import List, Optional
 from parsel import Selector
 
 from src.hex_machina.ingestion.scrapers.html_article_scraper import (
-    PlaywrightHtmlArticleScraper,
+    ScrapyHtmlArticleScraper,
 )
 
 
-class HAIScraper(PlaywrightHtmlArticleScraper):
-    """Scraper for Stanford HAI articles using PlaywrightHtmlArticleScraper base."""
+class HAIScraper(ScrapyHtmlArticleScraper):
+    """Scraper for Stanford HAI articles using ScrapyHtmlArticleScraper base."""
 
     name = "hai_scraper"
 

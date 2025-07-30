@@ -9,6 +9,9 @@ from src.hex_machina.ingestion.ingestion_report import (
 )
 from src.hex_machina.ingestion.ingestion_runner import IngestionRunner
 from src.hex_machina.ingestion.scrapy_pipelines import ArticleStorePipeline
+from src.hex_machina.ingestion.scripts.generate_ingestion_domain_evaluation_report import (
+    main as generate_ingestion_domain_evaluation_report,
+)
 
 __all__ = [
     "ArticleModel",
@@ -19,4 +22,5 @@ __all__ = [
     "ArticleStorePipeline",
     "generate_html_ingestion_report",
     "IngestionReportGenerator",
+    "generate_ingestion_domain_evaluation_report",
 ]

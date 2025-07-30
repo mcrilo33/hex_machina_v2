@@ -17,9 +17,12 @@ class DummyScraper(BaseArticleScraper):
 
 def test_initialization_sets_defaults():
     scraper = DummyScraper(
-        limit_date=datetime(2024, 1, 1), start_urls=["url1"], scraper_config={}
+        start_urls=["url1"], scraper_config={"date_threshold": "2024-01-01"}
     )
-    assert scraper.limit_date == datetime(2024, 1, 1)
+    from datetime import timezone
+
+    expected_date = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    assert scraper.date_threshold == expected_date
     assert scraper.start_urls == ["url1"]
     assert hasattr(scraper, "_logger")
     assert hasattr(scraper, "parser")
@@ -32,13 +35,13 @@ def test_scraper_config_is_stored():
 
 
 def test_check_published_date_recent():
-    scraper = DummyScraper(limit_date=datetime(2024, 1, 1), scraper_config={})
+    scraper = DummyScraper(scraper_config={"date_threshold": "2024-01-01"})
     recent_date = datetime(2024, 2, 1)
     assert scraper.check_published_date(recent_date) is True
 
 
 def test_check_published_date_old():
-    scraper = DummyScraper(limit_date=datetime(2024, 1, 1), scraper_config={})
+    scraper = DummyScraper(scraper_config={"date_threshold": "2024-01-01"})
     old_date = datetime(2023, 12, 31)
     assert scraper.check_published_date(old_date) is False
 
@@ -68,6 +71,7 @@ async def test_handle_error_logs(monkeypatch):
     class DummyFailure:
         value = Exception("fail")
         response = type("Resp", (), {"url": "http://bad", "status": 404})()
+        request = type("Req", (), {"url": "http://bad"})()
 
     await scraper.handle_error(DummyFailure())
     assert logs
@@ -80,7 +84,6 @@ async def test_start_yields_requests():
         scraper_config={},
     )
     scraper.settings = {}  # Mock settings to avoid AttributeError
-    scraper.limit_date = None  # Explicitly set to avoid AttributeError
     requests = [r async for r in scraper.start()]
     assert len(requests) == 2
     for req in requests:

@@ -16,7 +16,10 @@ class ScraperConfig(BaseModel):
         "synced_review_scraper",
         "playwright_html_article_scraper",
         "playwright_rss_article_scraper",
+        "simple_playwright_rss_article_scraper",
+        "standalone_playwright_rss_article_scraper",
         "stealth_playwright_rss_article_scraper",
+        "scrapy_rss_article_scraper",
     ]
     start_urls: List[str]
     articles_limit: Optional[int] = None
@@ -36,7 +39,10 @@ class ScrapyConfig(BaseModel):
     """Scrapy configuration with comprehensive settings for optimal ingestion."""
 
     # Basic Settings
-    user_agent: Optional[str] = None
+    user_agent: Optional[str] = Field(
+        default=None,
+        description="User agent string. Set to None when using Playwright to let browser use default",
+    )
     robotstxt_obey: bool = Field(
         default=False, description="Whether to respect robots.txt"
     )
@@ -111,6 +117,20 @@ class ScrapyConfig(BaseModel):
     # Telnet Settings
     telnet_console_enabled: bool = Field(
         default=False, description="Enable telnet console"
+    )
+
+    # Playwright Settings
+    playwright_launch_options: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Playwright browser launch options. See https://playwright.dev/python/docs/api/class-browsertype#browser-type-launch for all available options",
+    )
+    restart_disconnected_browser: bool = Field(
+        default=True,
+        description="Restart browser if it becomes disconnected during scraping",
+    )
+    process_request_headers: Optional[bool] = Field(
+        default=None,
+        description="Process request headers. Set to None to give complete control to Playwright, True to use Scrapy headers, or provide a custom function path",
     )
 
     # Custom Settings

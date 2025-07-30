@@ -45,6 +45,10 @@ readability-lxml = "^0.8.4.1"
 ipdb = "^0.13.13"
 twisted = {extras = ["asyncio"], version = "^25.5.0"}
 parsel = "^1.10.0"
+beautifulsoup4 = "^4.13.4"
+psutil = "^6.1.0"
+brotli = "^1.1.0"
+seaborn = "^0.13.2"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.2"

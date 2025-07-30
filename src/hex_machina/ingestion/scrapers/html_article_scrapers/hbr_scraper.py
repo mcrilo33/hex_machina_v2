@@ -5,12 +5,12 @@ from datetime import datetime
 from typing import List, Optional
 
 from src.hex_machina.ingestion.scrapers.html_article_scraper import (
-    PlaywrightHtmlArticleScraper,
+    ScrapyHtmlArticleScraper,
 )
 
 
-class HBRScraper(PlaywrightHtmlArticleScraper):
-    """Scraper for Harvard Business Review latest articles using PlaywrightHtmlArticleScraper base."""
+class HBRScraper(ScrapyHtmlArticleScraper):
+    """Scraper for Harvard Business Review latest articles using ScrapyHtmlArticleScraper base."""
 
     name = "hbr_scraper"
 
@@ -74,20 +74,19 @@ class HBRScraper(PlaywrightHtmlArticleScraper):
         Extract the published date from the article page.
         Looks for span element with date format 'June 23, 2025'
         """
-        # Look for span elements that might contain dates
-        date_spans = selector.css("span::text").getall()
-
-        for span_text in date_spans:
-            if span_text:
-                date_str = span_text.strip()
-                try:
-                    # Parse date in format 'June 23, 2025'
-                    parsed_date = datetime.strptime(date_str, "%B %d, %Y")
-                    formatted_date = parsed_date.strftime("%a, %d %b %Y 12:00:01 +0000")
-                    return formatted_date
-                except ValueError:
-                    # Continue checking other spans if this one doesn't match the format
-                    continue
-
-        self._logger.warning("No valid date found in span elements")
+        # Look for the pattern "articlePublishDate":"2025-09-01" in the page source
+        html = selector.get()
+        match = re.search(r'"articlePublishDate":"(\d{4}-\d{2}-\d{2})"', html)
+        if match:
+            date_str = match.group(1)  # e.g., "2025-09-01"
+            try:
+                parsed_date = datetime.strptime(date_str, "%Y-%m-%d")
+                formatted_date = parsed_date.strftime("%a, %d %b %Y 12:00:01 +0000")
+                return formatted_date
+            except ValueError:
+                self._logger.warning(
+                    f"Found articlePublishDate but could not parse: {date_str}"
+                )
+        else:
+            self._logger.warning('No "articlePublishDate" pattern found in page source')
         return None

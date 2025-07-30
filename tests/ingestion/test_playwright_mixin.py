@@ -61,35 +61,6 @@ class TestPlaywrightMixin:
         for method in page_methods:
             assert isinstance(method, PageMethod)
 
-    def test_get_playwright_page_kwargs(self):
-        """Test that get_playwright_page_kwargs returns valid configuration."""
-        kwargs = self.mixin.get_playwright_page_kwargs()
-
-        assert isinstance(kwargs, dict)
-        assert "user_agent" in kwargs
-        assert "viewport" in kwargs
-        assert "extra_http_headers" in kwargs
-
-        assert isinstance(kwargs["user_agent"], str)
-        assert isinstance(kwargs["viewport"], dict)
-        assert isinstance(kwargs["extra_http_headers"], dict)
-
-    def test_get_advanced_playwright_page_kwargs(self):
-        """Test that get_advanced_playwright_page_kwargs returns valid configuration."""
-        kwargs = self.mixin.get_advanced_playwright_page_kwargs()
-
-        assert isinstance(kwargs, dict)
-        assert "user_agent" in kwargs
-        assert "viewport" in kwargs
-        assert "extra_http_headers" in kwargs
-
-        # Check for additional stealth headers
-        headers = kwargs["extra_http_headers"]
-        assert "Sec-Fetch-Dest" in headers
-        assert "Sec-Fetch-Mode" in headers
-        assert "Sec-Fetch-Site" in headers
-        assert "Sec-Fetch-User" in headers
-
     def test_get_playwright_request_meta(self):
         """Test that get_playwright_request_meta returns valid meta configuration."""
         callback = Mock()

@@ -2,8 +2,8 @@
 # This configuration demonstrates all available Scrapy settings for optimal ingestion
 
 db_path: "storage/articles.db"
-articles_limit: 10  # Limit articles per scraper
-date_threshold: "2024-07-20"  # Only articles after this date
+articles_limit: 1000  # Limit articles per scraper
+date_threshold: "2024-07-27"  # Only articles after this date
 log_level: "DEBUG"
 
 scrapy:
@@ -163,39 +163,63 @@ scrapers:
   - type: playwright_rss_article_scraper
     start_urls:
       - "https://www.aws.amazon.com/rss"
+      - "https://www.eugeneyan.com/rss"
+      - "https://www.huyenchip.com/feed"
+      - "https://www.marktechpost.com/feed"
+      - "https://www.theverge.com/rss.xml"
+      - "https://www.blogs.nvidia.com/feed"
+      - "https://www.dagster.io/rss.xml"
+      - "https://www.philschmid.de/rss"
+      - "https://www.thegradient.pub/feed"
+      - "https://www.towardsdatascience.com/feed"
+      - "https://www.thenextweb.com/feed"
+      - "https://www.pyimagesearch.com/feed"
+      - "https://www.snorkel.ai/feed"
+      - "https://www.neptune.ai/feed"
+      - "https://www.arize.com/feed"
+      - "https://www.github.blog/feed"
+      - "https://www.sciencedaily.com/rss/computers_math/artificial_intelligence.xml"
+      - "https://hackernoon.com/tagged/ai/feed"
+      - "https://techxplore.com/rss-feed/machine-learning-ai-news/"
+      - "https://venturebeat.com/category/ai/feed/"
+      - "https://theconversation.com/topics/artificial-intelligence-ai-90/articles.atom"
+      - "https://developer.nvidia.com/blog/feed"
+      - "https://aws.amazon.com/blogs/ai/feed"
+      - "https://www.theguardian.com/technology/artificialintelligenceai/rss"
+      - "https://futurism.com/categories/ai-artificial-intelligence/feed"
+      - "https://www.zdnet.com/topic/artificial-intelligence/rss.xml"
+      - "http://databricks.com/feed"
+      - "https://www.unite.ai/feed/"
+      - "https://www.newscientist.com/subject/technology/feed/"
+      - "https://www.artificialintelligence-news.com/feed/"
+      - "https://www.wired.com/feed/tag/ai/latest/rss"
+      - "https://www.technologyreview.com/feed/"
+      - "https://the-decoder.com/feed/"
+      - "https://www.marketingaiinstitute.com/blog/rss.xml"
+      - "https://huggingface.co/blog/feed.xml"
+      - "https://news.mit.edu/topic/mitmachine-learning-rss.xml"
+      - "https://globalnews.ca/tag/artificial-intelligence/feed/"
+      - "https://www.microsoft.com/en-us/research/feed/"
+      - "https://news.microsoft.com/source/topics/ai/feed/"
+      - "https://spacenews.com/tag/artificial-intelligence/feed/"
+      - "https://spectrum.ieee.org/feeds/topic/artificial-intelligence.rss"
+      - "https://www.latent.space/feed"
+      - "https://bdtechtalks.com/feed/"
+      - "https://ainowinstitute.org/news/feed"
+      - "https://www.datarobot.com/blog/feed/"
+      - "https://blog.langchain.dev/rss/"
+      - "https://blog.ml.cmu.edu/feed/"
+      - "https://syncedreview.com/feed/"
+      - "https://bair.berkeley.edu/blog/feed.xml"
+      - "https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_ollama.xml"
+      - "https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic.xml"
+      - "https://siliconangle.com/category/ai/feed/"
+      - "https://siliconangle.com/category/big-data/feed/"
+      - "https://www.aisnakeoil.com/feed"
+      - "https://synthedia.substack.com/feed"
+      - "https://rss.beehiiv.com/feeds/2R3C6Bt5wj.xml"
+      - "https://voicebot.ai/feed/"
+      - "https://becominghuman.ai/feed"
+      - "https://www.aitrends.com/feed/"
+      - "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=19854910"
       - "https://research.google/blog/rss/"
-  - scraper_1:
-    type: stealth_playwright_rss_article_scraper
-    start_urls:
-      - "https://www.kdnuggets.com/feed"
-      - "https://www.techcrunch.com/feed"
-  - type: "hai_scraper"
-    start_urls:
-      - "https://hai.stanford.edu/news?filterBy=news"
-    articles_limit: 3
-    max_articles_per_page: 3
-  - type: "hbr_scraper"
-    start_urls:
-      - "https://hbr.org/the-latest"
-    articles_limit: 3
-    max_articles_per_page: 3
-  - type: "meta_scraper"
-    start_urls:
-      - "https://ai.meta.com/blog/"
-    articles_limit: 3
-    max_articles_per_page: 3
-  - type: "microsoft_scraper"
-    start_urls:
-      - "https://news.microsoft.com/source/view-all/?_categories=ai"
-    articles_limit: 4
-    max_articles_per_page: 4
-  - type: "research_google_scraper"
-    start_urls:
-      - "https://research.google/blog/"
-    articles_limit: 2
-    max_articles_per_page: 2
-  - type: "synced_review_scraper"
-    start_urls:
-      - "https://syncedreview.com"
-    articles_limit: 4
-    max_articles_per_page: 4

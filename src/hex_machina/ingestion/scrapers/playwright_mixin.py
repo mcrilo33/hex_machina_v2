@@ -10,9 +10,8 @@ from scrapy_playwright.page import PageMethod
 # List of realistic User-Agents for rotation
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
 ]
 
 
@@ -65,32 +64,6 @@ class PlaywrightMixin:
 
         return [
             # Stealth: Hide webdriver
-            PageMethod(
-                "evaluate",
-                "() => Object.defineProperty(navigator, 'webdriver', {get: () => undefined})",
-            ),
-            # Stealth: Fake languages
-            PageMethod(
-                "add_init_script",
-                "Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});",
-            ),
-            # Stealth: Fake plugins
-            PageMethod(
-                "add_init_script",
-                "Object.defineProperty(navigator, 'plugins', {get: () => [1,2,3,4,5]});",
-            ),
-            # Stealth: Fake WebGL vendor/renderer
-            PageMethod(
-                "add_init_script",
-                """
-               const getParameter = WebGLRenderingContext.prototype.getParameter;
-               WebGLRenderingContext.prototype.getParameter = function(parameter) {
-                   if (parameter === 37445) { return 'Intel Inc.'; }
-                   if (parameter === 37446) { return 'Intel Iris OpenGL Engine'; }
-                   return getParameter(parameter);
-               };
-               """,
-            ),
             PageMethod("wait_for_timeout", interactions["delay"]),
             PageMethod("wait_for_load_state", "networkidle"),
         ]
@@ -113,30 +86,6 @@ class PlaywrightMixin:
 
         advanced_methods = [
             # Advanced stealth: Fake permissions
-            PageMethod(
-                "add_init_script",
-                """
-                Object.defineProperty(navigator, 'permissions', {
-                    get: () => ({
-                        query: () => Promise.resolve({ state: 'granted' })
-                    })
-                });
-                """,
-            ),
-            # Advanced stealth: Fake notifications
-            PageMethod(
-                "add_init_script",
-                """
-                Object.defineProperty(Notification, 'permission', {
-                    get: () => 'granted'
-                });
-                """,
-            ),
-            # Random scrolling
-            PageMethod(
-                "evaluate",
-                f"() => window.scrollTo(0, {random.randint(100, 500)})",
-            ),
             PageMethod("wait_for_timeout", random.randint(200, 800)),
             PageMethod("wait_for_load_state", "networkidle"),
         ]
@@ -158,9 +107,8 @@ class PlaywrightMixin:
             user_agent = self.get_random_user_agent()
 
         return {
-            "user_agent": user_agent,
-            "viewport": {"width": 1920, "height": 1080},
             "extra_http_headers": {
+                "User-Agent": user_agent,  # Set user agent in headers instead of separate key
                 "Accept-Language": "en-US,en;q=0.9",
                 "Accept-Encoding": "gzip, deflate, br",
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
@@ -309,7 +257,6 @@ class PlaywrightMixin:
         )
 
         headers = self.get_playwright_headers(user_agent)
-
         return scrapy.Request(
             url=url,
             callback=callback,
@@ -337,6 +284,7 @@ class PlaywrightMixin:
             "error_message": str(failure.value),
             "article_title": getattr(article, "title", "Unknown"),
         }
+        self._playwright_logger.error(f"Error processing article: {error_info}")
 
         # Handle specific browser disconnection errors
         if (

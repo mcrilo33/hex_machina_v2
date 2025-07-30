@@ -134,7 +134,10 @@ class ArticleParser:
         if not raw_tags:
             return []
 
-        tags = [tag["term"].strip() for tag in raw_tags]
+        try:
+            tags = [tag["term"].strip() for tag in raw_tags]
+        except Exception:
+            tags = raw_tags
         return tags
 
     def _clean_markdown(self, text: str) -> str:

@@ -6,7 +6,6 @@ from datetime import datetime
 from typing import List, Optional
 
 import scrapy
-from scrapy_playwright.page import PageMethod
 
 from src.hex_machina.ingestion.article_parser import ArticleParser
 from src.hex_machina.utils import DateParser, extract_markdown_from_html
@@ -36,20 +35,39 @@ class BaseArticleScraper(scrapy.Spider, ABC):
         self.start_urls = start_urls or []
         self.parser = ArticleParser()
 
+        # Load date threshold from scraper config
+        self.date_threshold = None
+        if scraper_config.get("date_threshold"):
+            try:
+                self.date_threshold = DateParser.parse_date(
+                    scraper_config["date_threshold"]
+                )
+                self._logger.info(
+                    f"Loaded date threshold from config: {self.date_threshold}"
+                )
+            except Exception as e:
+                self._logger.warning(
+                    f"Failed to parse date threshold '{scraper_config['date_threshold']}': {e}"
+                )
+
+        # Load articles limit from scraper config
+        self.articles_limit = scraper_config.get("articles_limit")
+        if self.articles_limit:
+            self._logger.info(
+                f"Loaded articles limit from config: {self.articles_limit}"
+            )
+
     async def start(self):
         """Start requests for RSS feeds using Scrapy's entry point.
 
         Yields:
             Scrapy Request objects for each start URL.
         """
-        # Read settings when spider starts
-        self._load_settings_from_scrapy()
-
         self._logger.info(
             f"Starting {self.name} scraper with {len(self.start_urls)} feeds"
         )
         self._logger.info(
-            f"Date threshold: {self.limit_date.isoformat() if self.limit_date else 'None'}"
+            f"Date threshold: {self.date_threshold.isoformat() if self.date_threshold else 'None'}"
         )
         if self.articles_limit:
             self._logger.info(f"Articles limit: {self.articles_limit}")
@@ -60,36 +78,10 @@ class BaseArticleScraper(scrapy.Spider, ABC):
                 url=start_url,
                 callback=self.parse_start_url,
                 errback=self.handle_error,
+                headers=self.get_default_headers("rss"),
                 meta={
                     "feed_url": start_url,
-                    "playwright": True,
-                    "playwright_include_page": True,
-                    "playwright_page_methods": [
-                        PageMethod("wait_for_load_state", "networkidle"),
-                    ],
                 },
-            )
-
-    def _load_settings_from_scrapy(self):
-        """Load configuration from Scrapy settings."""
-        # Get date threshold from settings
-        date_threshold_str = self.settings.get("INGESTION_DATE_THRESHOLD")
-        if date_threshold_str:
-            try:
-                self.limit_date = DateParser.parse_date(date_threshold_str)
-                self._logger.info(
-                    f"Loaded date threshold from settings: {self.limit_date}"
-                )
-            except Exception as e:
-                self._logger.warning(
-                    f"Failed to parse date threshold '{date_threshold_str}': {e}"
-                )
-
-        # Get articles limit from settings
-        self.articles_limit = self.settings.get("CLOSESPIDER_ITEMCOUNT")
-        if self.articles_limit:
-            self._logger.info(
-                f"Loaded articles limit from settings: {self.articles_limit}"
             )
 
     def _log_scraping_summary(self, articles: List) -> None:
@@ -145,20 +137,39 @@ class BaseArticleScraper(scrapy.Spider, ABC):
         pass
 
     def check_published_date(self, published_date: datetime) -> bool:
-        """Check if article is recent enough.
+        """Check if article is too old compared to the date threshold.
 
         Args:
             published_date: Article publication date
 
         Returns:
-            True if article is recent enough, False otherwise
+            True if article is recent enough, False if too old
         """
-        is_recent = DateParser.is_date_after_threshold(published_date, self.limit_date)
-        if not is_recent and published_date and self.limit_date:
+        if not self.date_threshold:
+            # No date threshold set, accept all articles
+            return True
+
+        if not published_date:
+            # No published date available, skip article
+            return False
+
+        # Handle timezone-aware vs timezone-naive datetime comparison
+        from datetime import timezone
+
+        threshold = self.date_threshold
+        if threshold.tzinfo is None and published_date.tzinfo is not None:
+            # Make threshold timezone-aware by assuming UTC
+            threshold = threshold.replace(tzinfo=timezone.utc)
+        elif threshold.tzinfo is not None and published_date.tzinfo is None:
+            # Make published_date timezone-aware by assuming UTC
+            published_date = published_date.replace(tzinfo=timezone.utc)
+
+        is_too_old = published_date < threshold
+        if is_too_old:
             self._logger.debug(
-                f"Article too old: {published_date.isoformat()} < {self.limit_date.isoformat()}"
+                f"Article too old: {published_date.isoformat()} < {threshold.isoformat()}"
             )
-        return is_recent
+        return not is_too_old
 
     async def handle_error(self, failure):
         """Handle request errors.
@@ -166,7 +177,39 @@ class BaseArticleScraper(scrapy.Spider, ABC):
         Args:
             failure: Scrapy failure object
         """
-        self._logger.error(f"Request failed: {getattr(failure, 'value', failure)}")
+        request = failure.request
+        error_type = getattr(failure, "type", "Unknown")
+        error_value = getattr(failure, "value", failure)
+
+        # Extract more detailed error information
+        if hasattr(error_value, "response"):
+            status_code = error_value.response.status
+            url = error_value.response.url
+            self._logger.error(
+                f"Request failed for {url}: HTTP {status_code} - {error_type}: {error_value}"
+            )
+
+            # Log specific error types for better debugging
+            if status_code == 520:
+                self._logger.warning(
+                    f"Cloudflare 520 error detected for {url}. This usually indicates "
+                    f"the origin server is unreachable. Consider retrying later or "
+                    f"checking if the site is experiencing issues."
+                )
+            elif status_code in [521, 522, 523, 524]:
+                self._logger.warning(
+                    f"Cloudflare error {status_code} detected for {url}. "
+                    f"This indicates server connectivity issues."
+                )
+            elif status_code == 429:
+                self._logger.warning(
+                    f"Rate limit (429) detected for {url}. Consider increasing delays."
+                )
+        else:
+            self._logger.error(
+                f"Request failed for {request.url}: {error_type}: {error_value}"
+            )
+
         # Subclasses should yield or return error info as needed
 
     def parse_html(self, html_content: str) -> tuple[str, Optional[str], Optional[str]]:
@@ -202,3 +245,47 @@ class BaseArticleScraper(scrapy.Spider, ABC):
         """
         content_elements = extract_markdown_from_html(html_content)
         return content_elements
+
+    def get_default_headers(self, content_type: str = "rss") -> dict:
+        """
+        Get default headers for different content types.
+
+        Args:
+            content_type: Type of content being requested ("rss", "html", "article")
+
+        Returns:
+            Dictionary of headers appropriate for the content type
+        """
+        base_headers = {
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+            "Sec-Ch-Ua-Mobile": "?0",
+            "Sec-Ch-Ua-Platform": '"macOS"',
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-User": "?1",
+            "Upgrade-Insecure-Requests": "1",
+            "DNT": "1",
+        }
+
+        if content_type == "rss":
+            base_headers["Accept"] = (
+                "application/rss+xml, application/xml, text/xml, */*"
+            )
+        elif content_type == "html":
+            base_headers["Accept"] = (
+                "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
+            )
+        elif content_type == "article":
+            base_headers["Accept"] = (
+                "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
+            )
+        else:
+            base_headers["Accept"] = "*/*"
+
+        return base_headers

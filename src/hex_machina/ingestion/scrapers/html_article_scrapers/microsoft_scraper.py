@@ -1,16 +1,15 @@
 """Microsoft AI news scraper for Hex Machina v2."""
 
 import re
-from datetime import datetime
 from typing import List, Optional
 
 from src.hex_machina.ingestion.scrapers.html_article_scraper import (
-    PlaywrightHtmlArticleScraper,
+    ScrapyHtmlArticleScraper,
 )
 
 
-class MicrosoftScraper(PlaywrightHtmlArticleScraper):
-    """Scraper for Microsoft AI news articles using PlaywrightHtmlArticleScraper base."""
+class MicrosoftScraper(ScrapyHtmlArticleScraper):
+    """Scraper for Microsoft AI news articles using ScrapyHtmlArticleScraper base."""
 
     name = "microsoft_scraper"
 
@@ -59,24 +58,14 @@ class MicrosoftScraper(PlaywrightHtmlArticleScraper):
         Extract the title from the article page.
         Gets the text from the first h2 in <article>
         """
-        # Get the first h2 element specifically
-        first_h2 = selector.css("article h2").get()
-
-        if not first_h2:
-            return None
-
-        # Create a new selector from just the first h2 element
-        from parsel import Selector
-
-        h2_selector = Selector(text=first_h2)
-
-        # Get all span text from within this specific h2 only
-        title_spans = h2_selector.css("split-text span::text").getall()
-
-        if title_spans:
-            # Join all span text to form the complete title
-            title = " ".join([span.strip() for span in title_spans if span.strip()])
-            return title if title else None
+        # Extract the <title> tag content from the page
+        page_text = selector.get()
+        match = re.search(r"<title>(.*?)</title>", page_text, re.IGNORECASE | re.DOTALL)
+        if match:
+            title = match.group(1).strip()
+            if title.endswith(" - Source"):
+                title = title[: -len(" - Source")].rstrip()
+            return title
 
         return None
 
@@ -111,31 +100,10 @@ class MicrosoftScraper(PlaywrightHtmlArticleScraper):
         Searches for pattern 'June 16 2025' in span::text within
         first div[role="paragraph"]
         """
-        # Get all span text from the first div[role="paragraph"]
-        paragraph_spans = selector.css(
-            'div[role="paragraph"] split-text::text'
-        ).getall()
-
-        if paragraph_spans:
-            # Join all span text and search for date pattern
-            full_text = " ".join(
-                [span.strip() for span in paragraph_spans if span.strip()]
-            )
-
-            # Search for date pattern like 'June 16 2025'
-            date_pattern = r"([A-Za-z]+)\s+(\d{1,2})\s+(\d{4})"
-            match = re.search(date_pattern, full_text)
-
-            if match:
-                month, day, year = match.groups()
-                try:
-                    # Parse date in format 'June 16 2025'
-                    date_str = f"{month} {day}, {year}"
-                    parsed_date = datetime.strptime(date_str, "%B %d, %Y")
-                    formatted_date = parsed_date.strftime("%a, %d %b %Y 12:00:01 +0000")
-                    return formatted_date
-                except ValueError as e:
-                    self._logger.warning(f"Failed to parse date '{date_str}': {e}")
-
-        self._logger.warning("No valid date found in paragraph spans")
+        # Look for the pattern '"datePublished":"2025-07-14T15:00:03+00:00"' in the selector text
+        page_text = selector.get()
+        match = re.search(r'"datePublished":"([^"]+)"', page_text)
+        if match:
+            published_date = match.group(1)
+            return published_date
         return None

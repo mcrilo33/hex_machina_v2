@@ -180,6 +180,7 @@ wandb/
 
 # Database
 *.db
+*.db.wal
 *.sqlite
 *.sqlite3
 

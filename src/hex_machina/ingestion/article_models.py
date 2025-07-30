@@ -87,11 +87,7 @@ class RSSArticlePreview(BaseModel):
             url=entry.get("link", entry.get("url")),
             url_domain=extract_domain(entry.get("link")),
             summary=entry.get("summary", entry.get("description", "")),
-            tags=(
-                [tag["term"] for tag in entry.get("tags", [])]
-                if "tags" in entry
-                else []
-            ),
+            tags=entry.get("tags", []),
         )
 
 

@@ -113,7 +113,7 @@ scrapers:
       - "tests/integration/data/research_google.html"
     articles_limit: 2
     max_articles_per_page: 2
-  - type: "playwright_rss_article_scraper"
+  - type: "scrapy_rss_article_scraper"
     start_urls:
       - "tests/integration/data/test_feed_1.xml"
 

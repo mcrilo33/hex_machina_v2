@@ -5,12 +5,12 @@ from datetime import datetime
 from typing import List, Optional
 
 from src.hex_machina.ingestion.scrapers.html_article_scraper import (
-    PlaywrightHtmlArticleScraper,
+    ScrapyHtmlArticleScraper,
 )
 
 
-class SyncedReviewScraper(PlaywrightHtmlArticleScraper):
-    """Scraper for Synced Review articles using PlaywrightHtmlArticleScraper base."""
+class SyncedReviewScraper(ScrapyHtmlArticleScraper):
+    """Scraper for Synced Review articles using ScrapyHtmlArticleScraper base."""
 
     name = "synced_review_scraper"
 

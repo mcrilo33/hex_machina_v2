@@ -1,6 +1,6 @@
 import argparse
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 from src.hex_machina.ingestion.ingestion_domain_evaluation_report import (
     generate_html_ingestion_domain_evaluation_report,

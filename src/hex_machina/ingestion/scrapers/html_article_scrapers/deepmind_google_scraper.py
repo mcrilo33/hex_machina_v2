@@ -4,13 +4,13 @@ import re
 from typing import List, Optional
 
 from src.hex_machina.ingestion.scrapers.html_article_scraper import (
-    PlaywrightHtmlArticleScraper,
+    ScrapyHtmlArticleScraper,
 )
 from src.hex_machina.utils.date_parser import DateParser
 
 
-class DeepMindGoogleScraper(PlaywrightHtmlArticleScraper):
-    """Scraper for DeepMind Google articles using PlaywrightHtmlArticleScraper base."""
+class DeepMindGoogleScraper(ScrapyHtmlArticleScraper):
+    """Scraper for DeepMind Google articles using ScrapyHtmlArticleScraper base."""
 
     name = "deepmind_google_scraper"
 
