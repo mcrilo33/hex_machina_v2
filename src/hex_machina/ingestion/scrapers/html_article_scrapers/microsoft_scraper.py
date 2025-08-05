@@ -1,15 +1,15 @@
-"""Microsoft AI news scraper for Hex Machina v2."""
+"""Microsoft scraper for Hex Machina v2."""
 
 import re
 from typing import List, Optional
 
-from src.hex_machina.ingestion.scrapers.html_article_scraper import (
+from src.hex_machina.ingestion.scrapers.base.html_article_scraper import (
     ScrapyHtmlArticleScraper,
 )
 
 
 class MicrosoftScraper(ScrapyHtmlArticleScraper):
-    """Scraper for Microsoft AI news articles using ScrapyHtmlArticleScraper base."""
+    """Scraper for Microsoft AI news articles using HTMLArticleScraper base."""
 
     name = "microsoft_scraper"
 

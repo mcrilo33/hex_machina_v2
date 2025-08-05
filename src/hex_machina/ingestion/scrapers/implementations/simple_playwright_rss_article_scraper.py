@@ -4,9 +4,11 @@ from typing import Any, Optional
 
 import scrapy
 
-from src.hex_machina.ingestion.article_models import ArticleModel
-from src.hex_machina.ingestion.scrapers.playwright_mixin import PlaywrightMixin
-from src.hex_machina.ingestion.scrapers.rss_article_scraper import RSSArticleScraper
+from src.hex_machina.ingestion.models.article_models import ArticleModel
+from src.hex_machina.ingestion.scrapers.base.playwright_mixin import PlaywrightMixin
+from src.hex_machina.ingestion.scrapers.base.rss_article_scraper import (
+    RSSArticleScraper,
+)
 
 
 class SimplePlaywrightRSSArticleScraper(RSSArticleScraper, PlaywrightMixin):

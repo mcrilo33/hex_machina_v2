@@ -89,11 +89,6 @@ scrapy:
       'scrapy.downloadermiddlewares.cookies.CookiesMiddleware': 700,
     }
     
-    # Disable default user agent middleware to use custom one
-    DOWNLOADER_MIDDLEWARES: {
-      'scrapy.downloadermiddlewares.useragent.UserAgentMiddleware': None,
-    }
-    
     # Request Fingerprinting Protection
     DOWNLOAD_DELAY: 3.0
     RANDOMIZE_DOWNLOAD_DELAY: 0.5  # Add randomization

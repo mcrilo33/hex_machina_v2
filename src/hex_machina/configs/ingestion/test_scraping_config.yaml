@@ -1,7 +1,7 @@
 # Enhanced Scrapy Configuration for Hex Machina v2
 # This configuration demonstrates all available Scrapy settings for optimal ingestion
 
-db_path: "storage/articles14.db"
+db_path: "storage/articles13.db"
 articles_limit: 10000  # Limit articles per scraper
 date_threshold: "2025-07-25 00:00:00"  # Only articles after this date
 log_level: "DEBUG"

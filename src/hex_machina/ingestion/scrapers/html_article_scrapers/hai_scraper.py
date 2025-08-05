@@ -1,11 +1,11 @@
-"""Stanford HAI scraper for Hex Machina v2."""
+"""HAI scraper for Hex Machina v2."""
 
 from datetime import datetime
 from typing import List, Optional
 
 from parsel import Selector
 
-from src.hex_machina.ingestion.scrapers.html_article_scraper import (
+from src.hex_machina.ingestion.scrapers.base.html_article_scraper import (
     ScrapyHtmlArticleScraper,
 )
 

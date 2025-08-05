@@ -3,8 +3,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.hex_machina.ingestion.article_models import ArticleModel
-from src.hex_machina.ingestion.scrapers.stealth_playwright_rss_article_scraper import (
+from src.hex_machina.ingestion.models.article_models import ArticleModel
+from src.hex_machina.ingestion.scrapers.implementations.stealth_playwright_rss_article_scraper import (
     StealthPlaywrightRSSArticleScraper,
 )
 

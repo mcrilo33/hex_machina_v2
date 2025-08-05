@@ -1,13 +1,13 @@
 from unittest.mock import MagicMock
 
-from src.hex_machina.ingestion.config_models import (
+from src.hex_machina.ingestion.core.ingestion_runner import (
+    SCRAPER_CLASS_MAP,
+    IngestionRunner,
+)
+from src.hex_machina.ingestion.models.config_models import (
     IngestionConfig,
     ScraperConfig,
     ScrapyConfig,
-)
-from src.hex_machina.ingestion.ingestion_runner import (
-    SCRAPER_CLASS_MAP,
-    IngestionRunner,
 )
 
 
@@ -62,7 +62,7 @@ def test_build_settings_sets_playwright_process_request_headers():
     settings = runner._build_settings()
 
     # Should be the custom header processing function for meaningful scraping headers
-    from src.hex_machina.ingestion.ingestion_runner import custom_scraping_headers
+    from src.hex_machina.ingestion.core.ingestion_runner import custom_scraping_headers
 
     assert settings.get("PLAYWRIGHT_PROCESS_REQUEST_HEADERS") == custom_scraping_headers
 

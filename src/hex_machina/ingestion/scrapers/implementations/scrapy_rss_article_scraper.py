@@ -4,8 +4,10 @@ from typing import Any, Optional
 
 import scrapy
 
-from src.hex_machina.ingestion.article_models import ArticleModel
-from src.hex_machina.ingestion.scrapers.rss_article_scraper import RSSArticleScraper
+from src.hex_machina.ingestion.models.article_models import ArticleModel
+from src.hex_machina.ingestion.scrapers.base.rss_article_scraper import (
+    RSSArticleScraper,
+)
 
 
 class ScrapyRSSArticleScraper(RSSArticleScraper):
@@ -32,18 +34,21 @@ class ScrapyRSSArticleScraper(RSSArticleScraper):
         Uses standard Scrapy requests without Playwright for better stability
         and faster processing for sites that don't require JavaScript rendering.
         """
+        # Get domain-specific headers
+        headers = self.get_default_headers("article", article.url_domain)
+
         # Create standard Scrapy request
         request = scrapy.Request(
             url=article.url,
             callback=self.parse,
             errback=self.handle_error,
-            headers=self.get_default_headers("article"),
+            headers=headers,
             meta={
                 "scraped_article": article,
-                "dont_cache": True,  # Don't cache article requests
                 "dont_retry": False,  # Allow retries
             },
             dont_filter=True,
+            cookies={},  # Disable cookies
         )
 
         yield request
@@ -202,33 +207,49 @@ class ScrapyRSSArticleScraper(RSSArticleScraper):
             return [article]
         return []
 
-    def get_default_headers(self, content_type: str = "article") -> dict:
+    def get_default_headers(
+        self, content_type: str = "article", domain: str = None
+    ) -> dict:
         """
-        Get default headers for different content types.
+        Get default headers for different content types and domains.
 
         Args:
             content_type: Type of content being requested ("rss", "html", "article")
+            domain: Domain name to get specific headers for
 
         Returns:
-            Dictionary of headers appropriate for the content type
+            Dictionary of headers appropriate for the content type and domain
         """
+        # Get domain headers configuration from settings
+        domain_headers_config = self.settings.get("DOMAIN_HEADERS_CONFIG", {})
+
+        # Start with default headers
         base_headers = {
+            "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
             "Accept-Language": "en-US,en;q=0.9",
-            "Accept-Encoding": "gzip, deflate",  # No Brotli to avoid dependency issues
-            "Cache-Control": "no-cache",
+            "Accept-Encoding": "gzip, deflate, br",  # No Brotli to avoid dependency issues
+            "Cache-Control": "no-cache, no-store, must-revalidate",
             "Pragma": "no-cache",
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-            "Sec-Ch-Ua-Mobile": "?0",
-            "Sec-Ch-Ua-Platform": '"macOS"',
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "none",
-            "Sec-Fetch-User": "?1",
-            "Upgrade-Insecure-Requests": "1",
+            "Expires": "0",
             "DNT": "1",
             "Connection": "keep-alive",
         }
+
+        # Apply domain-specific headers if available
+        if domain and domain in domain_headers_config:
+            domain_config = domain_headers_config[domain]
+            # Override base headers with domain-specific ones
+            for header_name, header_value in domain_config.items():
+                # Convert snake_case to Title-Case for header names
+                header_key = "-".join(
+                    word.capitalize() for word in header_name.split("_")
+                )
+                base_headers[header_key] = header_value
+            self._logger.debug(f"Applied domain-specific headers for {domain}")
+        elif domain:
+            self._logger.debug(
+                f"No domain-specific headers found for {domain}, using defaults"
+            )
 
         if content_type == "rss":
             base_headers["Accept"] = (

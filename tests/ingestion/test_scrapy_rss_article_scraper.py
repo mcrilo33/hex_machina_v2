@@ -4,8 +4,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.hex_machina.ingestion.article_models import ArticleModel
-from src.hex_machina.ingestion.scrapers.scrapy_rss_article_scraper import (
+from src.hex_machina.ingestion.models.article_models import ArticleModel
+from src.hex_machina.ingestion.scrapers.implementations.scrapy_rss_article_scraper import (
     ScrapyRSSArticleScraper,
 )
 
@@ -25,9 +25,13 @@ class TestScrapyRSSArticleScraper:
     @pytest.fixture
     def scraper(self, scraper_config):
         """Create a ScrapyRSSArticleScraper instance."""
-        return ScrapyRSSArticleScraper(
+        scraper = ScrapyRSSArticleScraper(
             scraper_config=scraper_config, start_urls=["https://example.com/feed.xml"]
         )
+        # Set up settings attribute that would normally be set by Scrapy
+        scraper.settings = MagicMock()
+        scraper.settings.get.return_value = {}
+        return scraper
 
     @pytest.fixture
     def sample_article(self):
@@ -59,7 +63,7 @@ class TestScrapyRSSArticleScraper:
         assert "Accept" in headers
         assert "User-Agent" in headers
         assert "Accept-Encoding" in headers
-        assert headers["Accept-Encoding"] == "gzip, deflate"  # No Brotli
+        assert headers["Accept-Encoding"] == "gzip, deflate, br"
 
         # Test different content types
         rss_headers = scraper.get_default_headers("rss")
@@ -82,7 +86,6 @@ class TestScrapyRSSArticleScraper:
         assert request.callback == scraper.parse
         assert request.errback == scraper.handle_error
         assert request.meta["scraped_article"] == sample_article
-        assert request.meta["dont_cache"] is True
         assert request.meta["dont_retry"] is False
         assert request.dont_filter is True
         assert "User-Agent" in request.headers

@@ -1,12 +1,16 @@
-"""Base RSS article scraper for Hex Machina v2."""
+"""RSS article scraper for Hex Machina v2."""
 
-from abc import abstractmethod
 from typing import Optional
 
 import feedparser
 
-from src.hex_machina.ingestion.article_models import ArticleModel, RSSArticlePreview
-from src.hex_machina.ingestion.scrapers.base_article_scraper import BaseArticleScraper
+from src.hex_machina.ingestion.models.article_models import (
+    ArticleModel,
+    RSSArticlePreview,
+)
+from src.hex_machina.ingestion.scrapers.base.base_article_scraper import (
+    BaseArticleScraper,
+)
 
 
 class RSSArticleScraper(BaseArticleScraper):
@@ -27,7 +31,6 @@ class RSSArticleScraper(BaseArticleScraper):
         super().__init__(scraper_config=scraper_config, start_urls=start_urls, **kwargs)
         # Logger is inherited from BaseArticleScraper
 
-    @abstractmethod
     async def parse_article(self, article):
         """Parse individual article content.
 

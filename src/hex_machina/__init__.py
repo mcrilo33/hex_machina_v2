@@ -4,7 +4,6 @@ from src.hex_machina.ingestion import (
     ArticleModel,
     IngestionConfig,
     IngestionRunner,
-    generate_html_ingestion_report,
 )
 from src.hex_machina.utils.date_parser import DateParser
 
@@ -16,6 +15,5 @@ __all__ = [
     "ArticleModel",
     "IngestionConfig",
     "IngestionRunner",
-    "generate_html_ingestion_report",
     "DateParser",
 ]

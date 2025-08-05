@@ -2,7 +2,9 @@ from datetime import datetime
 
 import pytest
 
-from src.hex_machina.ingestion.scrapers.base_article_scraper import BaseArticleScraper
+from src.hex_machina.ingestion.scrapers.base.base_article_scraper import (
+    BaseArticleScraper,
+)
 
 
 class DummyScraper(BaseArticleScraper):

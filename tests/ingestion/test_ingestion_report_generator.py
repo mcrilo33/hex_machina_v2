@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
-from src.hex_machina.ingestion.ingestion_report import (
+from src.hex_machina.ingestion.evaluation.ingestion_report import (
     IngestionReportGenerator,
     generate_html_ingestion_report,
 )
@@ -322,7 +322,7 @@ class TestGenerateHtmlIngestionReport:
         ]
 
         with patch(
-            "src.hex_machina.ingestion.ingestion_report.IngestionReportGenerator"
+            "src.hex_machina.ingestion.evaluation.ingestion_report.IngestionReportGenerator"
         ) as mock_generator_class:
             mock_generator = mock_generator_class.return_value
             mock_generator.generate_report.return_value = str(

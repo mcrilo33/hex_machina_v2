@@ -1,9 +1,11 @@
+"""Generate ingestion domain evaluation report."""
+
 import argparse
 from datetime import datetime
 from pathlib import Path
 
-from src.hex_machina.ingestion.ingestion_domain_evaluation_report import (
-    generate_html_ingestion_domain_evaluation_report,
+from src.hex_machina.ingestion.evaluation.ingestion_domain_evaluation_report import (
+    IngestionDomainEvaluationReportGenerator,
 )
 from src.hex_machina.storage.manager import StorageManager
 
@@ -39,7 +41,7 @@ def main():
         domain_articles = [
             a for a in articles if getattr(a, "url_domain", None) == domain
         ]
-        report_path = generate_html_ingestion_domain_evaluation_report(
+        report_path = IngestionDomainEvaluationReportGenerator.generate_html_report(
             domain=domain,
             articles=domain_articles,
             output_dir=output_dir,

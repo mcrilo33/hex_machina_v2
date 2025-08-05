@@ -3,7 +3,7 @@
 import re
 from typing import List, Optional
 
-from src.hex_machina.ingestion.scrapers.html_article_scraper import (
+from src.hex_machina.ingestion.scrapers.base.html_article_scraper import (
     ScrapyHtmlArticleScraper,
 )
 from src.hex_machina.utils.date_parser import DateParser

@@ -5,8 +5,10 @@ from typing import Any, Optional
 import scrapy
 from playwright.async_api import async_playwright
 
-from src.hex_machina.ingestion.article_models import ArticleModel
-from src.hex_machina.ingestion.scrapers.rss_article_scraper import RSSArticleScraper
+from src.hex_machina.ingestion.models.article_models import ArticleModel
+from src.hex_machina.ingestion.scrapers.base.rss_article_scraper import (
+    RSSArticleScraper,
+)
 
 
 class StandalonePlaywrightRSSArticleScraper(RSSArticleScraper):
@@ -49,7 +51,6 @@ class StandalonePlaywrightRSSArticleScraper(RSSArticleScraper):
             errback=self.handle_error,
             meta={
                 "scraped_article": article,
-                "dont_cache": True,
                 "dont_retry": False,
             },
             dont_filter=True,

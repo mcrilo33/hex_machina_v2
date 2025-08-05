@@ -1,12 +1,16 @@
-import datetime
+"""Ingestion evaluation report generator for Hex Machina v2."""
+
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Any, List
 
 # Suppress matplotlib font manager debug messages
 logging.getLogger("matplotlib.font_manager").setLevel(logging.WARNING)
 
-from src.hex_machina.ingestion.ingestion_report import IngestionReportGenerator
+from src.hex_machina.ingestion.evaluation.ingestion_report import (
+    IngestionReportGenerator,
+)
 from src.hex_machina.reporting.base_report_generator import BaseReportGenerator
 from src.hex_machina.reporting.chart_utils import create_time_series_chart
 from src.hex_machina.reporting.report_builder import ReportBuilder
@@ -54,11 +58,9 @@ class IngestionEvaluationReportGenerator(BaseReportGenerator):
             sections, title="Ingestion Evaluation Report"
         )
 
-    def _get_operation_date(
-        self, operations: List[IngestionOperationDB]
-    ) -> datetime.datetime:
+    def _get_operation_date(self, operations: List[IngestionOperationDB]) -> datetime:
         # For evaluation reports, use current time instead of operation dates
-        return datetime.datetime.now()
+        return datetime.now()
 
     def _get_operation_id(self, operations: List[IngestionOperationDB]) -> str:
         return "all"

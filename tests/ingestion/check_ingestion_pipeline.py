@@ -235,6 +235,7 @@ def test_ingestion_pipeline():
                     "log_level",
                     "scrapy",
                     "scrapers",
+                    "domain_headers",
                 ], f"Unexpected parameter: {key}"
         else:
             assert (

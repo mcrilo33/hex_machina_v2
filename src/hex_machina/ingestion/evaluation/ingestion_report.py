@@ -1,10 +1,10 @@
-"""Ingestion-specific report generator."""
+"""Ingestion report generator for Hex Machina v2."""
 
-import datetime
+from datetime import datetime
 from pathlib import Path
 from typing import List
 
-from src.hex_machina.ingestion.article_models import ArticleModel
+from src.hex_machina.ingestion.models.article_models import ArticleModel
 from src.hex_machina.reporting.base_report_generator import BaseReportGenerator
 from src.hex_machina.reporting.chart_utils import (
     create_content_length_distribution,
@@ -67,7 +67,7 @@ class IngestionReportGenerator(BaseReportGenerator):
         """
         return ReportBuilder.build_markdown_report(sections, title="Ingestion Report")
 
-    def _get_operation_date(self, operation: IngestionOperationDB) -> datetime.datetime:
+    def _get_operation_date(self, operation: IngestionOperationDB) -> datetime:
         """Get the date from the operation for directory naming.
 
         Args:

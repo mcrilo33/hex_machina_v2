@@ -1,26 +1,44 @@
-"""Ingestion module for scraping and processing articles."""
+"""Ingestion module for Hex Machina project."""
 
-from src.hex_machina.ingestion.article_models import ArticleModel, RSSArticlePreview
-from src.hex_machina.ingestion.config_loader import load_ingestion_config
-from src.hex_machina.ingestion.config_models import IngestionConfig
-from src.hex_machina.ingestion.ingestion_report import (
-    IngestionReportGenerator,
-    generate_html_ingestion_report,
-)
-from src.hex_machina.ingestion.ingestion_runner import IngestionRunner
-from src.hex_machina.ingestion.scrapy_pipelines import ArticleStorePipeline
-from src.hex_machina.ingestion.scripts.generate_ingestion_domain_evaluation_report import (
-    main as generate_ingestion_domain_evaluation_report,
-)
+from .core import *
+from .evaluation import *
+from .models import *
+from .processing import *
+from .scrapers.base import *
+from .scrapers.implementations import *
 
 __all__ = [
+    # Models
     "ArticleModel",
     "RSSArticlePreview",
     "IngestionConfig",
-    "load_ingestion_config",
+    # Core
     "IngestionRunner",
-    "ArticleStorePipeline",
-    "generate_html_ingestion_report",
+    "ConfigLoader",
+    # Processing
+    "ArticleParser",
+    "ScrapyPipelines",
+    # Evaluation
     "IngestionReportGenerator",
-    "generate_ingestion_domain_evaluation_report",
+    "IngestionEvaluationReportGenerator",
+    "IngestionDomainEvaluationReportGenerator",
+    # Base Scrapers
+    "BaseArticleScraper",
+    "RSSArticleScraper",
+    "PlaywrightMixin",
+    "ScrapyHtmlArticleScraper",
+    # Scraper Implementations
+    "ScrapyRSSArticleScraper",
+    "PlaywrightRSSArticleScraper",
+    "StealthPlaywrightRSSArticleScraper",
+    "SimplePlaywrightRSSArticleScraper",
+    "StandalonePlaywrightRSSArticleScraper",
+    # HTML Article Scrapers
+    "DeepMindGoogleScraper",
+    "HAIScraper",
+    "HBRScraper",
+    "MetaScraper",
+    "MicrosoftScraper",
+    "ResearchGoogleScraper",
+    "SyncedReviewScraper",
 ]

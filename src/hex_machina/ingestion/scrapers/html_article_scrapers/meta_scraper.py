@@ -1,9 +1,9 @@
-"""Meta AI blog scraper for Hex Machina v2."""
+"""Meta scraper for Hex Machina v2."""
 
 from datetime import datetime
 from typing import List, Optional
 
-from src.hex_machina.ingestion.scrapers.html_article_scraper import (
+from src.hex_machina.ingestion.scrapers.base.html_article_scraper import (
     ScrapyHtmlArticleScraper,
 )
 

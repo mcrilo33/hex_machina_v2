@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from src.hex_machina.ingestion.scrapers.playwright_mixin import PlaywrightMixin
+from src.hex_machina.ingestion.scrapers.base.playwright_mixin import PlaywrightMixin
 
 
 class TestPlaywrightMixin:

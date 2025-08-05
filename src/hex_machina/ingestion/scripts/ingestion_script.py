@@ -1,15 +1,15 @@
-"""Main ingestion script for Hex Machina v2."""
+"""Ingestion script for Hex Machina v2."""
 
 import argparse
 import logging
 from pathlib import Path
 
-from src.hex_machina.ingestion.article_models import ArticleModel
-from src.hex_machina.ingestion.config_loader import load_ingestion_config
-from src.hex_machina.ingestion.ingestion_report import (
+from src.hex_machina.ingestion.core.config_loader import load_ingestion_config
+from src.hex_machina.ingestion.core.ingestion_runner import IngestionRunner
+from src.hex_machina.ingestion.evaluation.ingestion_report import (
     generate_html_ingestion_report,
 )
-from src.hex_machina.ingestion.ingestion_runner import IngestionRunner
+from src.hex_machina.ingestion.models.article_models import ArticleModel
 from src.hex_machina.storage.manager import StorageManager
 
 logger = logging.getLogger(__name__)

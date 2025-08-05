@@ -7,8 +7,10 @@ from typing import Any, List, Optional
 import scrapy
 from parsel import Selector
 
-from src.hex_machina.ingestion.article_models import ArticleModel
-from src.hex_machina.ingestion.scrapers.base_article_scraper import BaseArticleScraper
+from src.hex_machina.ingestion.models.article_models import ArticleModel
+from src.hex_machina.ingestion.scrapers.base.base_article_scraper import (
+    BaseArticleScraper,
+)
 from src.hex_machina.utils.date_parser import DateParser
 
 
@@ -199,7 +201,6 @@ class ScrapyHtmlArticleScraper(BaseArticleScraper):
                     errback=self.handle_error,
                     headers=self.get_default_headers("article"),
                     meta={
-                        "dont_cache": True,  # Don't cache article requests
                         "dont_retry": False,  # Allow retries
                     },
                     dont_filter=True,
@@ -416,47 +417,18 @@ class ScrapyHtmlArticleScraper(BaseArticleScraper):
 
         return [article]
 
-    def get_default_headers(self, content_type: str = "article") -> dict:
+    def get_default_headers(
+        self, content_type: str = "article", domain: str = None
+    ) -> dict:
         """
         Get default headers for different content types.
 
         Args:
             content_type: Type of content being requested ("rss", "html", "article")
+            domain: Domain name to get specific headers for
 
         Returns:
             Dictionary of headers appropriate for the content type
         """
-        base_headers = {
-            "Accept-Language": "en-US,en;q=0.9",
-            "Accept-Encoding": "gzip, deflate",  # No Brotli to avoid dependency issues
-            "Cache-Control": "no-cache",
-            "Pragma": "no-cache",
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-            "Sec-Ch-Ua-Mobile": "?0",
-            "Sec-Ch-Ua-Platform": '"macOS"',
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "none",
-            "Sec-Fetch-User": "?1",
-            "Upgrade-Insecure-Requests": "1",
-            "DNT": "1",
-            "Connection": "keep-alive",
-        }
-
-        if content_type == "rss":
-            base_headers["Accept"] = (
-                "application/rss+xml, application/xml, text/xml, */*"
-            )
-        elif content_type == "html":
-            base_headers["Accept"] = (
-                "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
-            )
-        elif content_type == "article":
-            base_headers["Accept"] = (
-                "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
-            )
-        else:
-            base_headers["Accept"] = "*/*"
-
-        return base_headers
+        # Call parent method to get base headers with domain support
+        return super().get_default_headers(content_type, domain)

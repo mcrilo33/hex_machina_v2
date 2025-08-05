@@ -46,11 +46,11 @@ class WorkflowOperationDB(Base):
         primary_key=True,
     )
     workflow_name = Column(String(255), nullable=False)
-    parameters = Column(JSON, nullable=True)
-    started_at = Column(DateTime, nullable=False)
-    finished_at = Column(DateTime, nullable=True)
-    status = Column(String(32), nullable=False)
+    start_time = Column(DateTime, nullable=False)
+    end_time = Column(DateTime, nullable=True)
     notes = Column(Text, nullable=True)
+    status = Column(String(32), nullable=False)
+    parameters = Column(JSON, nullable=True)
     enrichments = relationship("EnrichmentDB", back_populates="workflow_operation")
 
 

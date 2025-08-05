@@ -7,7 +7,7 @@ from typing import List, Optional
 
 import scrapy
 
-from src.hex_machina.ingestion.article_parser import ArticleParser
+from src.hex_machina.ingestion.processing.article_parser import ArticleParser
 from src.hex_machina.utils import DateParser, extract_markdown_from_html
 
 
@@ -74,11 +74,17 @@ class BaseArticleScraper(scrapy.Spider, ABC):
 
         for start_url in self.start_urls:
             self._logger.debug(f"Yielding request for RSS feed: {start_url}")
+            # Extract domain from start_url for domain-specific headers
+            from urllib.parse import urlparse
+
+            parsed_url = urlparse(start_url)
+            domain = parsed_url.netloc
+
             yield scrapy.Request(
                 url=start_url,
                 callback=self.parse_start_url,
                 errback=self.handle_error,
-                headers=self.get_default_headers("rss"),
+                headers=self.get_default_headers("rss", domain),
                 meta={
                     "feed_url": start_url,
                 },
@@ -246,16 +252,22 @@ class BaseArticleScraper(scrapy.Spider, ABC):
         content_elements = extract_markdown_from_html(html_content)
         return content_elements
 
-    def get_default_headers(self, content_type: str = "rss") -> dict:
+    def get_default_headers(
+        self, content_type: str = "rss", domain: str = None
+    ) -> dict:
         """
-        Get default headers for different content types.
+        Get default headers for different content types and domains.
 
         Args:
             content_type: Type of content being requested ("rss", "html", "article")
+            domain: Domain name to get specific headers for
 
         Returns:
-            Dictionary of headers appropriate for the content type
+            Dictionary of headers appropriate for the content type and domain
         """
+        # Get domain headers configuration from settings
+        domain_headers_config = self.settings.get("DOMAIN_HEADERS_CONFIG", {})
+
         base_headers = {
             "Accept-Language": "en-US,en;q=0.9",
             "Accept-Encoding": "gzip, deflate, br",
@@ -272,6 +284,22 @@ class BaseArticleScraper(scrapy.Spider, ABC):
             "Upgrade-Insecure-Requests": "1",
             "DNT": "1",
         }
+
+        # Apply domain-specific headers if available
+        if domain and domain in domain_headers_config:
+            domain_config = domain_headers_config[domain]
+            # Override base headers with domain-specific ones
+            for header_name, header_value in domain_config.items():
+                # Convert snake_case to Title-Case for header names
+                header_key = "-".join(
+                    word.capitalize() for word in header_name.split("_")
+                )
+                base_headers[header_key] = header_value
+            self._logger.debug(f"Applied domain-specific headers for {domain}")
+        elif domain:
+            self._logger.debug(
+                f"No domain-specific headers found for {domain}, using defaults"
+            )
 
         if content_type == "rss":
             base_headers["Accept"] = (

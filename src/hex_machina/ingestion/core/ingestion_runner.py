@@ -6,21 +6,42 @@ from typing import Any, Dict
 from scrapy.crawler import CrawlerProcess
 from scrapy.utils.project import get_project_settings
 
-from src.hex_machina.ingestion.config_models import IngestionConfig
-from src.hex_machina.ingestion.scrapers import (
+from src.hex_machina.ingestion.models.config_models import IngestionConfig
+from src.hex_machina.ingestion.scrapers.html_article_scrapers.deepmind_google_scraper import (
     DeepMindGoogleScraper,
+)
+from src.hex_machina.ingestion.scrapers.html_article_scrapers.hai_scraper import (
     HAIScraper,
+)
+from src.hex_machina.ingestion.scrapers.html_article_scrapers.hbr_scraper import (
     HBRScraper,
+)
+from src.hex_machina.ingestion.scrapers.html_article_scrapers.meta_scraper import (
     MetaScraper,
+)
+from src.hex_machina.ingestion.scrapers.html_article_scrapers.microsoft_scraper import (
     MicrosoftScraper,
-    PlaywrightRSSArticleScraper,
+)
+from src.hex_machina.ingestion.scrapers.html_article_scrapers.research_google_scraper import (
     ResearchGoogleScraper,
-    ScrapyRSSArticleScraper,
-    SimplePlaywrightRSSArticleScraper,
-    StandalonePlaywrightRSSArticleScraper,
-    StealthPlaywrightRSSArticleScraper,
-    # Add other scrapers as needed
+)
+from src.hex_machina.ingestion.scrapers.html_article_scrapers.synced_review_scraper import (
     SyncedReviewScraper,
+)
+from src.hex_machina.ingestion.scrapers.implementations.playwright_rss_article_scraper import (
+    PlaywrightRSSArticleScraper,
+)
+from src.hex_machina.ingestion.scrapers.implementations.scrapy_rss_article_scraper import (
+    ScrapyRSSArticleScraper,
+)
+from src.hex_machina.ingestion.scrapers.implementations.simple_playwright_rss_article_scraper import (
+    SimplePlaywrightRSSArticleScraper,
+)
+from src.hex_machina.ingestion.scrapers.implementations.standalone_playwright_rss_article_scraper import (
+    StandalonePlaywrightRSSArticleScraper,
+)
+from src.hex_machina.ingestion.scrapers.implementations.stealth_playwright_rss_article_scraper import (
+    StealthPlaywrightRSSArticleScraper,
 )
 
 logger = logging.getLogger(__name__)
@@ -87,10 +108,8 @@ async def custom_scraping_headers(
         "DNT": "1",  # Do Not Track
     }
 
-    # Preserve important Scrapy headers if present
-    if "Cookie" in scrapy_headers:
-        enhanced_headers["Cookie"] = scrapy_headers["Cookie"]
-
+    # Preserve important Scrapy headers if present (excluding cookies)
+    # Note: Cookies are intentionally excluded for clean requests
     if "Referer" in scrapy_headers:
         enhanced_headers["Referer"] = scrapy_headers["Referer"]
 
@@ -238,6 +257,24 @@ class IngestionRunner:
         if self.config.articles_limit is not None:
             settings.set("CLOSESPIDER_ITEMCOUNT", self.config.articles_limit)
             logger.info(f"Setting Scrapy item limit to: {self.config.articles_limit}")
+
+        # Add domain headers configuration
+        if hasattr(self.config, "domain_headers") and self.config.domain_headers:
+            settings.set("DOMAIN_HEADERS_CONFIG", self.config.domain_headers)
+            logger.info(
+                f"Loaded domain-specific headers for {len(self.config.domain_headers)} domains"
+            )
+        else:
+            settings.set("DOMAIN_HEADERS_CONFIG", {})
+            logger.info("No domain-specific headers configured, using defaults")
+
+        # Force disable all caching and cookies for fresh content
+        settings.set("HTTPCACHE_ENABLED", False)
+        settings.set("HTTPCACHE_EXPIRATION_SECS", 0)
+        settings.set("HTTPCACHE_DIR", None)
+        settings.set("COOKIES_ENABLED", False)
+        settings.set("COOKIES_DEBUG", False)
+        logger.info("Disabled all caching and cookies for fresh content retrieval")
 
         # Date threshold will be passed directly to scrapers via scraper_config
         if self.config.date_threshold is not None:
@@ -387,6 +424,9 @@ class IngestionRunner:
         settings.set("DUPEFILTER_ENABLED", True)
         settings.set("DUPEFILTER_DEBUG", False)
         settings.set("HTTPCACHE_ENABLED", False)  # Disable caching for fresh content
+        settings.set("HTTPCACHE_EXPIRATION_SECS", 0)  # No cache expiration
+        settings.set("COOKIES_ENABLED", False)  # Disable cookies globally
+        settings.set("COOKIES_DEBUG", False)  # Disable cookie debugging
 
         return settings
 
@@ -394,7 +434,7 @@ class IngestionRunner:
         """Configure pipelines and middlewares based on settings."""
         # Item pipelines
         pipelines = {
-            "src.hex_machina.ingestion.scrapy_pipelines.ArticleStorePipeline": 100,
+            "src.hex_machina.ingestion.processing.scrapy_pipelines.ArticleStorePipeline": 100,
         }
         settings.set("ITEM_PIPELINES", pipelines)
 
@@ -417,12 +457,18 @@ class IngestionRunner:
 
         middlewares["scrapy.downloadermiddlewares.redirect.RedirectMiddleware"] = 600
         middlewares["scrapy.downloadermiddlewares.httpproxy.HttpProxyMiddleware"] = 750
-        middlewares[
-            "src.hex_machina.ingestion.middleware.RedirectLoggingMiddleware"
-        ] = 950  # Log redirects
 
-        # Cookies middleware (order 700)
-        if self.config.scrapy.cookies_enabled:
+        # Only add our custom middleware if not already configured
+        if (
+            "src.hex_machina.ingestion.core.middleware.RedirectLoggingMiddleware"
+            not in middlewares
+        ):
+            middlewares[
+                "src.hex_machina.ingestion.core.middleware.RedirectLoggingMiddleware"
+            ] = 950  # Log redirects
+
+        # Cookies middleware (order 700) - Disabled for clean requests
+        if False and self.config.scrapy.cookies_enabled:  # Force disable cookies
             middlewares["scrapy.downloadermiddlewares.cookies.CookiesMiddleware"] = 700
 
         # HTTP compression middleware (order 810)
@@ -431,8 +477,8 @@ class IngestionRunner:
                 "scrapy.downloadermiddlewares.httpcompression.HttpCompressionMiddleware"
             ] = 810
 
-        # HTTP cache middleware (order 900)
-        if False and self.config.scrapy.httpcache_enabled:
+        # HTTP cache middleware (order 900) - Disabled for fresh content
+        if False:  # Force disable HTTP cache
             middlewares[
                 "scrapy.downloadermiddlewares.httpcache.HttpCacheMiddleware"
             ] = 900
@@ -496,7 +542,7 @@ class IngestionRunner:
         import json
         from datetime import datetime
 
-        import src.hex_machina.ingestion.scrapy_pipelines as scrapy_pipelines
+        import src.hex_machina.ingestion.processing.scrapy_pipelines as scrapy_pipelines
         from src.hex_machina.storage.models import IngestionOperationDB
 
         scrapy_pipelines.GLOBAL_STORAGE_MANAGER = self.storage_manager

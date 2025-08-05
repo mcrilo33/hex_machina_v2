@@ -5,7 +5,7 @@ from typing import Optional
 
 import yaml
 
-from src.hex_machina.ingestion.config_models import IngestionConfig
+from src.hex_machina.ingestion.models.config_models import IngestionConfig
 
 
 class ConfigLoader:

@@ -2,8 +2,8 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-from src.hex_machina.ingestion.config_loader import ConfigLoader
-from src.hex_machina.ingestion.config_models import IngestionConfig
+from src.hex_machina.ingestion.core.config_loader import ConfigLoader
+from src.hex_machina.ingestion.models.config_models import IngestionConfig
 
 
 def write_yaml(tmp_path, content):

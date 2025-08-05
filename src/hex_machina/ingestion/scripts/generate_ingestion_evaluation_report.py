@@ -1,7 +1,9 @@
+"""Generate ingestion evaluation report."""
+
 import argparse
 
-from src.hex_machina.ingestion.ingestion_evaluation_report import (
-    generate_html_ingestion_evaluation_report,
+from src.hex_machina.ingestion.evaluation.ingestion_evaluation_report import (
+    IngestionEvaluationReportGenerator,
 )
 from src.hex_machina.storage.manager import StorageManager
 
@@ -22,10 +24,12 @@ def main():
     articles = storage.get_all_articles()
 
     # Generate report (BaseReportGenerator will create the proper directory structure)
-    report_path = generate_html_ingestion_evaluation_report(
-        operations=operations,
-        articles=articles,
-        output_dir=args.output_dir,
+    report_path = (
+        IngestionEvaluationReportGenerator.generate_html_ingestion_evaluation_report(
+            operations=operations,
+            articles=articles,
+            output_dir=args.output_dir,
+        )
     )
     print(f"Ingestion evaluation report saved to: {report_path}")
 
