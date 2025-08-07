@@ -98,7 +98,7 @@ class EnrichmentDB(Base):
     )
     article_id = Column(Integer, ForeignKey("articles.id"), nullable=False)
     workflow_operation_id = Column(
-        Integer, ForeignKey("workflow_operations.id"), nullable=False
+        Integer, ForeignKey("workflow_operations.id"), nullable=True
     )
     enrichment_type = Column(String(64), nullable=False)
     enrichment_data = Column(JSON, nullable=False)

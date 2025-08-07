@@ -1,0 +1,13 @@
+# Database configuration for enrichment operations
+database:
+  # Database file path
+  db_path: "storage/articles14.db"
+  
+  # Enable database storage by default
+  enable_by_default: true
+  
+  # Default batch size for processing articles
+  batch_size: 10
+  
+  # Maximum concurrent tasks
+  max_concurrent: 5 

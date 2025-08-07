@@ -1,183 +1,209 @@
-"""Core base classes for the Hex Machina project."""
+"""Base classes and data models for Hex Machina v2."""
 
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Union
+from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
-
-class BaseModule:
-    """Base class for all modules in the project."""
-
-    def __init__(self, name: str, config: Dict[str, Any]):
-        self.name = name
-        self.config = config
-        self.created_at = datetime.utcnow()
-
-    def get_config(self, key: str, default: Any = None) -> Any:
-        """Get configuration value."""
-        return self.config.get(key, default)
-
-
-class BaseConfig(BaseModel):
-    """Base configuration class for all modules."""
-
-    name: str = Field(..., description="Configuration name")
-    description: Optional[str] = Field(None, description="Configuration description")
-    version: str = Field("1.0.0", description="Configuration version")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-
-class BaseStorage(ABC):
-    """Base storage interface for all modules."""
-
-    @abstractmethod
-    async def store(self, data: Dict[str, Any]) -> str:
-        """Store data and return identifier."""
-        pass
-
-    @abstractmethod
-    async def retrieve(self, identifier: str) -> Optional[Dict[str, Any]]:
-        """Retrieve data by identifier."""
-        pass
-
-    @abstractmethod
-    async def update(self, identifier: str, data: Dict[str, Any]) -> bool:
-        """Update data by identifier."""
-        pass
-
-    @abstractmethod
-    async def delete(self, identifier: str) -> bool:
-        """Delete data by identifier."""
-        pass
-
-
-class BaseTask(ABC):
-    """Base task interface for all tasks."""
-
-    def __init__(self, config: Dict[str, Any]):
-        self.config = config
-        self.name = config.get("name", self.__class__.__name__)
-        self.task_type = config.get("task_type", "unknown")
-
-    @abstractmethod
-    async def execute(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute the task."""
-        pass
-
-    @abstractmethod
-    def validate_inputs(self, inputs: Dict[str, Any]) -> bool:
-        """Validate task inputs."""
-        pass
-
-    def get_metadata(self) -> Dict[str, Any]:
-        """Get task metadata."""
-        return {
-            "name": self.name,
-            "task_type": self.task_type,
-            "config": self.config,
-            "created_at": datetime.utcnow().isoformat(),
-        }
-
-
-class BaseWorkflow(ABC):
-    """Base workflow interface for all workflows."""
-
-    def __init__(self, config: Dict[str, Any]):
-        self.config = config
-        self.name = config.get("name", self.__class__.__name__)
-        self.workflow_type = config.get("workflow_type", "sequential")
-
-    @abstractmethod
-    async def execute(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute the workflow."""
-        pass
-
-    @abstractmethod
-    def validate_config(self) -> bool:
-        """Validate workflow configuration."""
-        pass
-
-    def get_metadata(self) -> Dict[str, Any]:
-        """Get workflow metadata."""
-        return {
-            "name": self.name,
-            "workflow_type": self.workflow_type,
-            "config": self.config,
-            "created_at": datetime.utcnow().isoformat(),
-        }
-
-
-class BaseEvaluator(ABC):
-    """Base evaluator interface for all evaluators."""
-
-    def __init__(self, config: Dict[str, Any]):
-        self.config = config
-        self.name = config.get("name", self.__class__.__name__)
-        self.evaluator_type = config.get("evaluator_type", "unknown")
-
-    @abstractmethod
-    async def evaluate(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Evaluate the inputs."""
-        pass
-
-    @abstractmethod
-    def validate_inputs(self, inputs: Dict[str, Any]) -> bool:
-        """Validate evaluator inputs."""
-        pass
-
-    def get_metadata(self) -> Dict[str, Any]:
-        """Get evaluator metadata."""
-        return {
-            "name": self.name,
-            "evaluator_type": self.evaluator_type,
-            "config": self.config,
-            "created_at": datetime.utcnow().isoformat(),
-        }
+# =============================================================================
+# Data Models for Task/Workflow Communication
+# =============================================================================
 
 
 class TaskInput(BaseModel):
-    """Input model for tasks."""
+    """Input data for a task execution."""
 
-    data: Dict[str, Any] = Field(..., description="Task input data")
-    metadata: Optional[Dict[str, Any]] = Field(None, description="Task input metadata")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    task_id: str = Field(description="Unique identifier for the task")
+    task_name: str = Field(description="Name of the task to execute")
+    input_data: Dict[str, Any] = Field(description="Input data for the task")
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict, description="Additional metadata"
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.now, description="Creation timestamp"
+    )
+
+    # Database integration fields
+    article_id: Optional[int] = Field(
+        default=None, description="Database article ID if input is from DB"
+    )
+    article_url: Optional[str] = Field(
+        default=None, description="Article URL for identification"
+    )
+    workflow_operation_id: Optional[int] = Field(
+        default=None, description="Workflow context"
+    )
+    save_to_db: bool = Field(
+        default=True, description="Whether to save enrichment to database"
+    )
 
 
 class TaskOutput(BaseModel):
-    """Output model for tasks."""
+    """Output data from a task execution."""
 
-    result: Dict[str, Any] = Field(..., description="Task output result")
-    metadata: Optional[Dict[str, Any]] = Field(None, description="Task output metadata")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    execution_time_ms: Optional[float] = Field(
-        None, description="Task execution time in milliseconds"
+    task_id: str = Field(description="Unique identifier for the task")
+    output_data: Dict[str, Any] = Field(description="Output data from the task")
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict, description="Additional metadata"
+    )
+    execution_time: float = Field(description="Task execution time in seconds")
+    created_at: datetime = Field(
+        default_factory=datetime.now, description="Creation timestamp"
+    )
+    error: Optional[str] = Field(
+        default=None, description="Error message if task failed"
     )
 
 
 class WorkflowResult(BaseModel):
-    """Result model for workflows."""
+    """Result from a workflow execution."""
 
-    workflow_name: str = Field(..., description="Workflow name")
-    success: bool = Field(..., description="Whether workflow succeeded")
-    result: Dict[str, Any] = Field(..., description="Workflow result")
-    error_message: Optional[str] = Field(None, description="Error message if failed")
-    metadata: Optional[Dict[str, Any]] = Field(None, description="Workflow metadata")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    execution_time_ms: Optional[float] = Field(
-        None, description="Workflow execution time in milliseconds"
+    workflow_id: str = Field(description="Unique identifier for the workflow")
+    task_results: List[TaskOutput] = Field(
+        description="Results from all tasks in the workflow"
     )
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict, description="Additional metadata"
+    )
+    total_execution_time: float = Field(
+        description="Total workflow execution time in seconds"
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.now, description="Creation timestamp"
+    )
+    status: str = Field(description="Workflow status: 'completed', 'failed', 'partial'")
 
 
 class EvaluationResult(BaseModel):
-    """Result model for evaluations."""
+    """Result from an evaluation execution."""
 
-    evaluator_name: str = Field(..., description="Evaluator name")
-    score: Optional[float] = Field(None, description="Evaluation score")
-    metrics: Dict[str, Any] = Field(
-        default_factory=dict, description="Evaluation metrics"
+    evaluation_id: str = Field(description="Unique identifier for the evaluation")
+    task_id: str = Field(description="ID of the task being evaluated")
+    metrics: Dict[str, Union[float, int, str, bool]] = Field(
+        description="Evaluation metrics"
     )
-    feedback: Optional[str] = Field(None, description="Evaluation feedback")
-    metadata: Optional[Dict[str, Any]] = Field(None, description="Evaluation metadata")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict, description="Additional metadata"
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.now, description="Creation timestamp"
+    )
+
+
+# =============================================================================
+# Base Classes for Core Components
+# =============================================================================
+
+
+class BaseConfig(BaseModel):
+    """Base configuration class for all components."""
+
+    name: str = Field(description="Configuration name")
+    version: str = Field(default="1.0.0", description="Configuration version")
+    description: Optional[str] = Field(
+        default=None, description="Configuration description"
+    )
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict, description="Additional metadata"
+    )
+
+
+class BaseModule(ABC):
+    """Base class for all modules in Hex Machina."""
+
+    def __init__(self, name: str, config: Optional[BaseConfig] = None):
+        self.name = name
+        self.config = config
+        self._logger = None  # Will be set by subclasses
+
+    @abstractmethod
+    def initialize(self) -> None:
+        """Initialize the module."""
+        pass
+
+    @abstractmethod
+    def cleanup(self) -> None:
+        """Clean up module resources."""
+        pass
+
+
+class BaseTask(BaseModule):
+    """Base class for all tasks in the enrichment system."""
+
+    def __init__(self, name: str, config: Optional[BaseConfig] = None):
+        super().__init__(name, config)
+        self.task_id = str(uuid4())
+
+    @abstractmethod
+    async def execute(self, input_data: TaskInput) -> TaskOutput:
+        """Execute the task with the given input data."""
+        pass
+
+    @abstractmethod
+    def validate_input(self, input_data: TaskInput) -> bool:
+        """Validate the input data for this task."""
+        pass
+
+    def get_task_info(self) -> Dict[str, Any]:
+        """Get information about this task."""
+        return {
+            "task_id": self.task_id,
+            "name": self.name,
+            "config": self.config.model_dump() if self.config else None,
+        }
+
+
+class BaseWorkflow(BaseModule):
+    """Base class for all workflows in the enrichment system."""
+
+    def __init__(self, name: str, config: Optional[BaseConfig] = None):
+        super().__init__(name, config)
+        self.workflow_id = str(uuid4())
+        self.tasks: List[BaseTask] = []
+
+    @abstractmethod
+    async def execute(self, input_data: TaskInput) -> WorkflowResult:
+        """Execute the workflow with the given input data."""
+        pass
+
+    def add_task(self, task: BaseTask) -> None:
+        """Add a task to this workflow."""
+        self.tasks.append(task)
+
+    def get_workflow_info(self) -> Dict[str, Any]:
+        """Get information about this workflow."""
+        return {
+            "workflow_id": self.workflow_id,
+            "name": self.name,
+            "config": self.config.model_dump() if self.config else None,
+            "task_count": len(self.tasks),
+        }
+
+
+class BaseEvaluator(BaseModule):
+    """Base class for all evaluators in the enrichment system."""
+
+    def __init__(self, name: str, config: Optional[BaseConfig] = None):
+        super().__init__(name, config)
+        self.evaluator_id = str(uuid4())
+
+    @abstractmethod
+    async def evaluate(self, task_output: TaskOutput) -> EvaluationResult:
+        """Evaluate the output of a task."""
+        pass
+
+    @abstractmethod
+    def get_metrics(self) -> List[str]:
+        """Get the list of metrics this evaluator produces."""
+        pass
+
+    def get_evaluator_info(self) -> Dict[str, Any]:
+        """Get information about this evaluator."""
+        return {
+            "evaluator_id": self.evaluator_id,
+            "name": self.name,
+            "config": self.config.model_dump() if self.config else None,
+            "metrics": self.get_metrics(),
+        }

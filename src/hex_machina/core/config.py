@@ -1,54 +1,123 @@
-"""Configuration management for the Hex Machina project."""
+"""Configuration management for Hex Machina v2."""
 
+import os
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 import yaml
+from pydantic import BaseModel, Field
 
 from .exceptions import ConfigurationException
 
 
+class ConfigReference(BaseModel):
+    """Reference to another configuration file."""
+
+    config_ref: str = Field(description="Path to the referenced configuration file")
+    overrides: Optional[Dict[str, Any]] = Field(
+        default=None, description="Values to override in the referenced config"
+    )
+
+
 class ConfigManager:
-    """Manages YAML configuration loading and composition."""
+    """Manages configuration loading, validation, and composition."""
 
-    def __init__(self, config_base_path: str = "src/hex_machina/configs"):
-        self.config_base_path = Path(config_base_path)
-        self._loaded_configs = {}
+    def __init__(self, config_dirs: Optional[List[str]] = None):
+        """Initialize the configuration manager.
 
-    def load_config(self, config_path: str) -> Dict[str, Any]:
-        """Load configuration with support for references."""
-        config_path = Path(config_path)
+        Args:
+            config_dirs: List of directories to search for configuration files
+        """
+        self.config_dirs = config_dirs or ["configs"]
+        self._loaded_configs: Dict[str, Dict[str, Any]] = {}
+        self._config_cache: Dict[str, Dict[str, Any]] = {}
 
-        # Resolve relative paths
-        if not config_path.is_absolute():
-            config_path = self.config_base_path / config_path
+    def load_config(
+        self, config_path: str, resolve_refs: bool = True
+    ) -> Dict[str, Any]:
+        """Load a configuration file.
 
-        if not config_path.exists():
-            raise ConfigurationException(
-                f"Configuration file not found: {config_path}", str(config_path)
-            )
+        Args:
+            config_path: Path to the configuration file
+            resolve_refs: Whether to resolve config_ref references
 
-        # Load YAML
+        Returns:
+            Loaded configuration dictionary
+
+        Raises:
+            ConfigurationException: If the configuration cannot be loaded
+        """
+        # Check cache first
+        cache_key = f"{config_path}:{resolve_refs}"
+        if cache_key in self._config_cache:
+            return self._config_cache[cache_key]
+
+        # Find the config file
+        config_file = self._find_config_file(config_path)
+        if not config_file:
+            raise ConfigurationException(f"Configuration file not found: {config_path}")
+
+        # Load the YAML file
         try:
-            with open(config_path, "r", encoding="utf-8") as f:
+            with open(config_file, "r", encoding="utf-8") as f:
                 config = yaml.safe_load(f)
-        except yaml.YAMLError as e:
+        except Exception as e:
             raise ConfigurationException(
-                f"Invalid YAML in config file: {e}", str(config_path)
+                f"Failed to load configuration {config_path}: {e}"
             )
 
-        # Resolve references
-        resolved_config = self._resolve_references(config, config_path.parent)
+        if config is None:
+            raise ConfigurationException(f"Configuration file is empty: {config_path}")
 
-        # Cache the resolved config
-        self._loaded_configs[str(config_path)] = resolved_config
+        # Resolve references if requested
+        if resolve_refs:
+            config = self._resolve_references(config, config_file.parent)
 
-        return resolved_config
+        # Cache the result
+        self._config_cache[cache_key] = config
+        return config
+
+    def _find_config_file(self, config_path: str) -> Optional[Path]:
+        """Find a configuration file in the search directories.
+
+        Args:
+            config_path: Path to the configuration file
+
+        Returns:
+            Path to the found configuration file, or None if not found
+        """
+        # If it's an absolute path or relative to current directory, check directly
+        if (
+            os.path.isabs(config_path)
+            or config_path.startswith("./")
+            or config_path.startswith("../")
+        ):
+            path = Path(config_path)
+            if path.exists():
+                return path
+
+        # Search in config directories
+        for config_dir in self.config_dirs:
+            # Try different extensions
+            for ext in [".yaml", ".yml", ""]:
+                path = Path(config_dir) / f"{config_path}{ext}"
+                if path.exists():
+                    return path
+
+        return None
 
     def _resolve_references(
-        self, config: Dict[str, Any], base_path: Path
+        self, config: Dict[str, Any], base_dir: Path
     ) -> Dict[str, Any]:
-        """Resolve config_ref references in configuration."""
+        """Resolve config_ref references in the configuration.
+
+        Args:
+            config: Configuration dictionary
+            base_dir: Base directory for resolving relative paths
+
+        Returns:
+            Configuration with resolved references
+        """
         if not isinstance(config, dict):
             return config
 
@@ -56,18 +125,17 @@ class ConfigManager:
 
         for key, value in config.items():
             if key == "config_ref" and isinstance(value, str):
-                # Handle config reference
-                ref_path = self._resolve_ref_path(value, base_path)
-                ref_config = self.load_config(str(ref_path))
+                # This is a reference, load the referenced config
+                ref_config = self._load_referenced_config(value, base_dir)
                 resolved_config.update(ref_config)
             elif isinstance(value, dict):
-                # Recursively resolve nested dictionaries
-                resolved_config[key] = self._resolve_references(value, base_path)
+                # Recursively resolve references in nested dictionaries
+                resolved_config[key] = self._resolve_references(value, base_dir)
             elif isinstance(value, list):
-                # Handle lists
+                # Resolve references in lists
                 resolved_config[key] = [
                     (
-                        self._resolve_references(item, base_path)
+                        self._resolve_references(item, base_dir)
                         if isinstance(item, dict)
                         else item
                     )
@@ -78,124 +146,142 @@ class ConfigManager:
 
         return resolved_config
 
-    def _resolve_ref_path(self, ref: str, base_path: Path) -> Path:
-        """Resolve a config reference to a file path."""
-        # Handle anchor references (e.g., "file.yaml#anchor")
-        if "#" in ref:
-            file_path, anchor = ref.split("#", 1)
-            # For now, we'll ignore anchors and just load the file
-            # TODO: Implement anchor support
-            ref = file_path
+    def _load_referenced_config(self, ref_path: str, base_dir: Path) -> Dict[str, Any]:
+        """Load a referenced configuration file.
 
+        Args:
+            ref_path: Path to the referenced configuration
+            base_dir: Base directory for resolving relative paths
+
+        Returns:
+            Loaded configuration dictionary
+        """
         # Resolve relative paths
-        ref_path = Path(ref)
-        if not ref_path.is_absolute():
-            ref_path = base_path / ref_path
+        if not os.path.isabs(ref_path):
+            ref_path = str(base_dir / ref_path)
 
-        return ref_path
+        # Load the referenced config
+        ref_config = self.load_config(ref_path, resolve_refs=True)
 
-    def get_config_section(self, config: Dict[str, Any], section_path: str) -> Any:
-        """Get a specific section from configuration using dot notation."""
-        sections = section_path.split(".")
-        current = config
+        return ref_config
 
-        for section in sections:
-            if isinstance(current, dict) and section in current:
-                current = current[section]
+    def merge_configs(
+        self, base_config: Dict[str, Any], override_config: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Merge two configurations, with override_config taking precedence.
+
+        Args:
+            base_config: Base configuration
+            override_config: Configuration to merge on top
+
+        Returns:
+            Merged configuration
+        """
+        merged = base_config.copy()
+
+        for key, value in override_config.items():
+            if (
+                key in merged
+                and isinstance(merged[key], dict)
+                and isinstance(value, dict)
+            ):
+                # Recursively merge nested dictionaries
+                merged[key] = self.merge_configs(merged[key], value)
             else:
-                raise ConfigurationException(
-                    f"Configuration section not found: {section_path}",
-                    details={
-                        "available_sections": (
-                            list(current.keys()) if isinstance(current, dict) else []
-                        )
-                    },
-                )
-
-        return current
-
-    def validate_config(self, config: Dict[str, Any], schema: Dict[str, Any]) -> bool:
-        """Validate configuration against a schema."""
-        # TODO: Implement schema validation
-        # For now, just check if required fields exist
-        required_fields = schema.get("required", [])
-
-        for field in required_fields:
-            if field not in config:
-                raise ConfigurationException(
-                    f"Required configuration field missing: {field}",
-                    details={
-                        "required_fields": required_fields,
-                        "available_fields": list(config.keys()),
-                    },
-                )
-
-        return True
-
-    def merge_configs(self, *configs: Dict[str, Any]) -> Dict[str, Any]:
-        """Merge multiple configurations."""
-        merged = {}
-
-        for config in configs:
-            merged.update(config)
+                # Override the value
+                merged[key] = value
 
         return merged
 
-    def save_config(self, config: Dict[str, Any], output_path: str) -> None:
-        """Save configuration to file."""
-        output_path = Path(output_path)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+    def validate_config(
+        self, config: Dict[str, Any], schema: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        """Validate a configuration against a schema.
 
+        Args:
+            config: Configuration to validate
+            schema: Optional schema for validation
+
+        Returns:
+            True if configuration is valid
+
+        Raises:
+            ConfigurationException: If configuration is invalid
+        """
+        # For now, we'll do basic validation
+        # In the future, we could add JSON Schema validation or Pydantic model validation
+
+        if not isinstance(config, dict):
+            raise ConfigurationException("Configuration must be a dictionary")
+
+        # Add more validation logic here as needed
+
+        return True
+
+    def save_config(self, config: Dict[str, Any], config_path: str) -> None:
+        """Save a configuration to a file.
+
+        Args:
+            config: Configuration to save
+            config_path: Path where to save the configuration
+
+        Raises:
+            ConfigurationException: If the configuration cannot be saved
+        """
         try:
-            with open(output_path, "w", encoding="utf-8") as f:
+            # Ensure the directory exists
+            config_file = Path(config_path)
+            config_file.parent.mkdir(parents=True, exist_ok=True)
+
+            with open(config_file, "w", encoding="utf-8") as f:
                 yaml.dump(config, f, default_flow_style=False, indent=2)
         except Exception as e:
             raise ConfigurationException(
-                f"Failed to save configuration: {e}", str(output_path)
+                f"Failed to save configuration {config_path}: {e}"
             )
 
+    def get_config_value(
+        self, config: Dict[str, Any], key_path: str, default: Any = None
+    ) -> Any:
+        """Get a value from a nested configuration using dot notation.
 
-class ConfigValidator:
-    """Validates configuration files."""
+        Args:
+            config: Configuration dictionary
+            key_path: Dot-separated path to the value (e.g., "database.host")
+            default: Default value if the key is not found
 
-    @staticmethod
-    def validate_task_config(config: Dict[str, Any]) -> bool:
-        """Validate task configuration."""
-        required_fields = ["task_type", "name"]
+        Returns:
+            The value at the specified path, or the default value
+        """
+        keys = key_path.split(".")
+        current = config
 
-        for field in required_fields:
-            if field not in config:
-                raise ConfigurationException(
-                    f"Task configuration missing required field: {field}",
-                    details={"required_fields": required_fields},
-                )
+        for key in keys:
+            if isinstance(current, dict) and key in current:
+                current = current[key]
+            else:
+                return default
 
-        return True
+        return current
 
-    @staticmethod
-    def validate_workflow_config(config: Dict[str, Any]) -> bool:
-        """Validate workflow configuration."""
-        required_fields = ["workflow_type", "name"]
+    def set_config_value(
+        self, config: Dict[str, Any], key_path: str, value: Any
+    ) -> None:
+        """Set a value in a nested configuration using dot notation.
 
-        for field in required_fields:
-            if field not in config:
-                raise ConfigurationException(
-                    f"Workflow configuration missing required field: {field}",
-                    details={"required_fields": required_fields},
-                )
+        Args:
+            config: Configuration dictionary to modify
+            key_path: Dot-separated path to the value (e.g., "database.host")
+            value: Value to set
+        """
+        keys = key_path.split(".")
+        current = config
 
-        return True
+        # Navigate to the parent of the target key
+        for key in keys[:-1]:
+            if key not in current:
+                current[key] = {}
+            current = current[key]
 
-    @staticmethod
-    def validate_evaluator_config(config: Dict[str, Any]) -> bool:
-        """Validate evaluator configuration."""
-        required_fields = ["evaluator_type", "name"]
-
-        for field in required_fields:
-            if field not in config:
-                raise ConfigurationException(
-                    f"Evaluator configuration missing required field: {field}",
-                    details={"required_fields": required_fields},
-                )
-
-        return True
+        # Set the value
+        current[keys[-1]] = value

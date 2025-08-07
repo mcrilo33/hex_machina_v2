@@ -52,6 +52,9 @@ seaborn = "^0.13.2"
 langchain = "^0.3.27"
 langchain-openai = "^0.3.28"
 langsmith = "^0.4.8"
+openai = "^1.98.0"
+click = "^8.1.0"
+tabulate = "^0.9.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.2"

@@ -1,10 +1,13 @@
-"""Core module for Hex Machina project."""
+"""Core module for Hex Machina v2.
+
+This module provides the foundational base classes and utilities used across
+all other modules in the project.
+"""
 
 from .base import (
     BaseConfig,
     BaseEvaluator,
     BaseModule,
-    BaseStorage,
     BaseTask,
     BaseWorkflow,
     EvaluationResult,
@@ -12,18 +15,12 @@ from .base import (
     TaskOutput,
     WorkflowResult,
 )
-from .config import ConfigManager, ConfigValidator
+from .config import ConfigManager
 from .exceptions import (
     ConfigurationException,
-    EnrichmentException,
     EvaluationException,
     HexMachinaException,
-    IngestionException,
-    LangSmithException,
-    ReportingException,
-    StorageException,
     TaskException,
-    ValidationException,
     WorkflowException,
 )
 
@@ -31,27 +28,20 @@ __all__ = [
     # Base classes
     "BaseModule",
     "BaseConfig",
-    "BaseStorage",
     "BaseTask",
     "BaseWorkflow",
     "BaseEvaluator",
+    # Data models
     "TaskInput",
     "TaskOutput",
     "WorkflowResult",
     "EvaluationResult",
+    # Configuration
+    "ConfigManager",
     # Exceptions
     "HexMachinaException",
     "ConfigurationException",
     "TaskException",
     "WorkflowException",
-    "StorageException",
-    "IngestionException",
-    "EnrichmentException",
     "EvaluationException",
-    "ReportingException",
-    "ValidationException",
-    "LangSmithException",
-    # Configuration
-    "ConfigManager",
-    "ConfigValidator",
 ]

@@ -127,3 +127,22 @@ class StorageManager:
             int: The number of articles with errors.
         """
         return self._adapter.count_errors_for_operation(ingestion_run_id)
+
+
+# Global storage manager instance
+_storage_manager = None
+
+
+def get_storage_manager(db_path: str = "data/hex_machina.db") -> StorageManager:
+    """Get the global storage manager instance.
+
+    Args:
+        db_path: Path to the database file
+
+    Returns:
+        StorageManager instance
+    """
+    global _storage_manager
+    if _storage_manager is None:
+        _storage_manager = StorageManager(db_path)
+    return _storage_manager
