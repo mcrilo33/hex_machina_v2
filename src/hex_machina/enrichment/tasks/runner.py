@@ -101,8 +101,9 @@ class TaskRunner:
                     continue
 
                 input_data = self._article_to_input_data(article)
-                task = self.run_task(task_name, input_data)
-                tasks.append(task)
+                # Create the coroutine (don't await it yet)
+                task_coro = self.run_task(task_name, input_data)
+                tasks.append(task_coro)
 
             # Execute batch concurrently
             if tasks:
@@ -222,12 +223,12 @@ class TaskRunner:
         """Save task results to storage."""
         try:
             # Save to local storage
-            await self._task_storage.save_task_input(task_input)
-            await self._task_storage.save_task_output(result)
+            self._task_storage.store_task_input(task_input)
+            self._task_storage.store_task_output(result)
 
             # Save to database if needed
             if task_input.save_to_db and result.error is None:
-                await self._database_storage.save_task_output(result)
+                self._database_storage.store_task_output(result)
 
         except Exception as e:
             self._logger.error(f"Error saving results: {e}")

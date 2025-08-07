@@ -4,11 +4,19 @@ import logging
 import os
 from typing import Any, Dict, Optional
 
+from dotenv import load_dotenv
 from langsmith import Client
 from langsmith.run_helpers import trace
 
 from src.hex_machina.core import TaskInput, TaskOutput
 from src.hex_machina.core.exceptions import TaskException
+
+# Load environment variables at module level
+load_dotenv()
+
+# Enable LangChain tracing for proper nesting
+os.environ["LANGCHAIN_TRACING_V2"] = "true"
+os.environ["LANGCHAIN_PROJECT"] = "hex-machina-v2"
 
 
 class LangSmithTracer:
@@ -31,6 +39,11 @@ class LangSmithTracer:
         """Initialize LangSmith client."""
         api_key = os.getenv("LANGSMITH_API_KEY")
         if api_key:
+            # Ensure LANGSMITH_PROJECT is set
+            if not os.getenv("LANGSMITH_PROJECT"):
+                os.environ["LANGSMITH_PROJECT"] = self.project_name
+                self._logger.info(f"Set LANGSMITH_PROJECT to: {self.project_name}")
+
             self._client = Client(api_key=api_key)
             self._logger.info(
                 f"LangSmith client initialized for project: {self.project_name}"
@@ -187,73 +200,81 @@ class LangSmithTracer:
             # Fallback to normal execution if LangSmith is not available
             return await task.execute(task_input)
 
-        # Create parent trace
-        with trace(
-            project_name=self.project_name,
-            run_type="chain",
-            name=task_input.task_id,
-            inputs={"task_input": task_input.model_dump()},
-            tags=[f"task:{task_name}"],
-            metadata={"task_name": task_name, "task_id": task_input.task_id},
-        ) as parent_run:
+        # Use LangChain's tracing context for proper nesting
+        # This ensures that LangChain components (ChatPromptTemplate, ChatOpenAI)
+        # are properly nested within our parent trace
+        from langchain_core.tracers.context import tracing_v2_enabled
 
-            # Span 1: Input Validation
+        with tracing_v2_enabled():
             with trace(
                 project_name=self.project_name,
-                run_type="tool",
-                name="input_validation",
+                run_type="chain",
+                name=task_input.task_id,
                 inputs={"task_input": task_input.model_dump()},
-                tags=[f"task:{task_name}", "phase:validation"],
-                metadata={"task_name": task_name, "phase": "input_validation"},
-            ) as validation_span:
-                # Validate input
-                if not task.validate_input(task_input):
-                    validation_span.end(
-                        outputs={"validation_result": "failed"},
-                        error="Invalid input data",
+                tags=[f"task:{task_name}"],
+                metadata={"task_name": task_name, "task_id": task_input.task_id},
+            ) as parent_run:
+
+                # Span 1: Input Validation
+                with trace(
+                    project_name=self.project_name,
+                    run_type="tool",
+                    name="input_validation",
+                    inputs={"task_input": task_input.model_dump()},
+                    tags=[f"task:{task_name}", "phase:validation"],
+                    metadata={"task_name": task_name, "phase": "input_validation"},
+                ) as validation_span:
+                    # Validate input
+                    if not task.validate_input(task_input):
+                        validation_span.end(
+                            outputs={"validation_result": "failed"},
+                            error="Invalid input data",
+                        )
+                        raise TaskException("Invalid input data")
+
+                    validation_span.end(outputs={"validation_result": "success"})
+
+                # Span 2: LLM Execution (handled by LangChain's RunnableSequence)
+                # With tracing_v2_enabled(), LangChain components will automatically nest
+                # as child spans within the parent trace
+                task_output = await task.execute(task_input)
+
+                # Span 3: Output Parsing
+                with trace(
+                    project_name=self.project_name,
+                    run_type="tool",
+                    name="output_parsing",
+                    inputs={
+                        "raw_output": str(getattr(task, "_last_chain_result", None))
+                    },
+                    tags=[f"task:{task_name}", "phase:parsing"],
+                    metadata={"task_name": task_name, "phase": "output_parsing"},
+                ) as parsing_span:
+                    # Process and validate the result
+                    chain_result = getattr(task, "_last_chain_result", None)
+                    parsing_success = chain_result is not None and not task_output.error
+
+                    parsing_span.end(
+                        outputs={
+                            "parsing_result": (
+                                "success" if parsing_success else "failed"
+                            ),
+                            "parsed_output": task_output.output_data,
+                            "has_error": bool(task_output.error),
+                        },
+                        error=task_output.error,
                     )
-                    raise TaskException("Invalid input data")
 
-                validation_span.end(
-                    outputs={"validation_result": "success"},
-                )
-
-            # Span 2: LLM Execution (handled by LangChain's RunnableSequence)
-            # This will be automatically nested as a child span
-            task_output = await task.execute(task_input)
-
-            # Span 3: Output Parsing
-            with trace(
-                project_name=self.project_name,
-                run_type="tool",
-                name="output_parsing",
-                inputs={"raw_output": str(getattr(task, "_last_chain_result", None))},
-                tags=[f"task:{task_name}", "phase:parsing"],
-                metadata={"task_name": task_name, "phase": "output_parsing"},
-            ) as parsing_span:
-                # Process and validate the result
-                chain_result = getattr(task, "_last_chain_result", None)
-                parsing_success = chain_result is not None and not task_output.error
-
-                parsing_span.end(
+                # Update parent trace with final results
+                parent_run.end(
                     outputs={
-                        "parsing_result": "success" if parsing_success else "failed",
-                        "parsed_output": task_output.output_data,
-                        "has_error": bool(task_output.error),
+                        "task_output": task_output.model_dump(),
+                        "chain_result": str(getattr(task, "_last_chain_result", None)),
                     },
                     error=task_output.error,
                 )
 
-            # Update parent trace with final results
-            parent_run.end(
-                outputs={
-                    "task_output": task_output.model_dump(),
-                    "chain_result": str(getattr(task, "_last_chain_result", None)),
-                },
-                error=task_output.error,
-            )
-
-            return task_output
+                return task_output
 
 
 # Global LangSmith tracer instance (lazy initialization)

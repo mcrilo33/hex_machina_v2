@@ -6,11 +6,11 @@ import json
 import click
 from dotenv import load_dotenv
 
+# Load environment variables first, before any other imports
+load_dotenv()
+
 from src.hex_machina.enrichment.core.article_source import ArticleSource
 from src.hex_machina.enrichment.tasks.runner import task_runner
-
-# Load environment variables
-load_dotenv()
 
 
 def validate_source_options(
