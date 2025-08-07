@@ -1,6 +1,5 @@
-"""Datasets CLI for dataset management."""
+"""Dataset management CLI module."""
 
-# TODO: Implement datasets CLI
-# This will handle dataset creation, management, LangSmith dataset sync, etc.
+from .main import manage
 
-__all__ = []
+__all__ = ["manage"]

@@ -1,5 +1,6 @@
-"""Hex Machina v2 CLI - Main dispatcher."""
+"""Hex Machina CLI."""
 
-from .tasks import tasks_cli
+from .tasks.main import run as run_task
+from .datasets.main import manage as manage_datasets
 
-__all__ = ["tasks_cli"]
+__all__ = ["run_task", "manage_datasets"]
