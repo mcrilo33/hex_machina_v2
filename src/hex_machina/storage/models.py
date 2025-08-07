@@ -51,7 +51,6 @@ class WorkflowOperationDB(Base):
     notes = Column(Text, nullable=True)
     status = Column(String(32), nullable=False)
     parameters = Column(JSON, nullable=True)
-    enrichments = relationship("EnrichmentDB", back_populates="workflow_operation")
 
 
 class ArticleDB(Base):
@@ -97,9 +96,7 @@ class EnrichmentDB(Base):
         primary_key=True,
     )
     article_id = Column(Integer, ForeignKey("articles.id"), nullable=False)
-    workflow_operation_id = Column(
-        Integer, ForeignKey("workflow_operations.id"), nullable=True
-    )
+    workflow_operation_id = Column(String(255), nullable=True)
     enrichment_type = Column(String(64), nullable=False)
     enrichment_data = Column(JSON, nullable=False)
     source = Column(String(64), nullable=False)
@@ -108,4 +105,3 @@ class EnrichmentDB(Base):
     created_at = Column(DateTime, nullable=False)
     version = Column(String(32), nullable=True)
     article = relationship(ArticleDB, back_populates="enrichments")
-    workflow_operation = relationship(WorkflowOperationDB, back_populates="enrichments")

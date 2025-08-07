@@ -30,7 +30,12 @@ class TaskRunner:
         self._langsmith_tracer = get_langsmith_tracer()
         self._task_config_manager = task_config_manager
 
-    async def run_task(self, task_name: str, input_data: Dict[str, Any]) -> TaskOutput:
+    async def run_task(
+        self,
+        task_name: str,
+        input_data: Dict[str, Any],
+        workflow_operation_id: Optional[str] = None,
+    ) -> TaskOutput:
         """Run a single task on input data."""
         self._logger.info(f"Running task: {task_name}")
 
@@ -39,12 +44,17 @@ class TaskRunner:
 
         task_id = f"{task_name}_{uuid.uuid4().hex[:8]}"
 
+        # Detect article context for database saving
+        article_context = self._detect_article_context(input_data)
+
         # Create task input
         task_input = TaskInput(
             task_id=task_id,
             task_name=task_name,
             input_data=input_data,
             save_to_db=self._should_save_to_db(input_data),
+            article_id=article_context.get("article_id") if article_context else None,
+            workflow_operation_id=workflow_operation_id,
         )
 
         # Load task configuration
@@ -66,6 +76,11 @@ class TaskRunner:
             task, task_input, task_name
         )
 
+        # Add task input to result metadata for database saving
+        if result.metadata is None:
+            result.metadata = {}
+        result.metadata["task_input"] = task_input.model_dump()
+
         # Save results
         await self._save_results(task_input, result)
 
@@ -81,6 +96,13 @@ class TaskRunner:
     ) -> List[TaskOutput]:
         """Run a task on multiple articles with batch processing."""
         self._logger.info(f"Running task {task_name} on {len(articles)} articles")
+
+        # Generate workflow operation ID for this batch run
+        import uuid
+        from datetime import datetime
+
+        workflow_operation_id = f"batch_{task_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        self._logger.info(f"Generated workflow operation ID: {workflow_operation_id}")
 
         results = []
 
@@ -101,8 +123,8 @@ class TaskRunner:
                     continue
 
                 input_data = self._article_to_input_data(article)
-                # Create the coroutine (don't await it yet)
-                task_coro = self.run_task(task_name, input_data)
+                # Create the coroutine (don't await it yet) with workflow operation ID
+                task_coro = self.run_task(task_name, input_data, workflow_operation_id)
                 tasks.append(task_coro)
 
             # Execute batch concurrently

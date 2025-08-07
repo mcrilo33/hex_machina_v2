@@ -32,8 +32,8 @@ class TaskInput(BaseModel):
     article_url: Optional[str] = Field(
         default=None, description="Article URL for identification"
     )
-    workflow_operation_id: Optional[int] = Field(
-        default=None, description="Workflow context"
+    workflow_operation_id: Optional[str] = Field(
+        default=None, description="Workflow context identifier"
     )
     save_to_db: bool = Field(
         default=True, description="Whether to save enrichment to database"
