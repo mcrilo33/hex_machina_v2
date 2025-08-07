@@ -1,9 +1,10 @@
 """LangSmith synchronization for datasets."""
 
 import logging
-import json
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+
 from langsmith import Client
+
 from src.hex_machina.storage.models import DatasetExampleDB
 
 logger = logging.getLogger(__name__)
@@ -46,8 +47,8 @@ class LangSmithSync:
         self,
         dataset_id: str,
         examples: List[DatasetExampleDB],
-    ) -> None:
-        """Add examples to LangSmith dataset."""
+    ) -> List[str]:
+        """Add examples to LangSmith dataset and return their IDs."""
         if not self.client:
             raise RuntimeError("LangSmith client not available")
 
@@ -63,11 +64,23 @@ class LangSmithSync:
                 langsmith_examples.append(langsmith_example)
 
             # Add examples in bulk
-            self.client.create_examples(
+            created_examples = self.client.create_examples(
                 dataset_id=dataset_id,
                 examples=langsmith_examples,
             )
-            logger.info(f"Added {len(examples)} examples to LangSmith dataset {dataset_id}")
+
+            # The create_examples method returns a dictionary with example_ids
+            if isinstance(created_examples, dict) and "example_ids" in created_examples:
+                example_ids = created_examples["example_ids"]
+            elif isinstance(created_examples, list):
+                example_ids = created_examples
+            else:
+                example_ids = [created_examples]
+
+            logger.info(
+                f"Added {len(examples)} examples to LangSmith dataset {dataset_id}"
+            )
+            return example_ids
         except Exception as e:
             logger.error(f"Failed to add examples to LangSmith dataset: {e}")
             raise
@@ -83,14 +96,33 @@ class LangSmithSync:
             raise RuntimeError("LangSmith client not available")
 
         try:
+            updated_count = 0
             # Update each example's split
             for example in examples:
-                if example.langsmith_example_id:
-                    self.client.update_example(
-                        example_id=example.langsmith_example_id,
-                        split=new_split,
-                    )
-            logger.info(f"Updated split to '{new_split}' for {len(examples)} examples")
+                if (
+                    example.langsmith_example_id
+                    and not example.langsmith_example_id.startswith("langsmith_")
+                ):
+                    try:
+                        self.client.update_example(
+                            example_id=example.langsmith_example_id,
+                            split=new_split,
+                        )
+                        updated_count += 1
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to update example {example.langsmith_example_id}: {e}"
+                        )
+                        continue
+
+            if updated_count > 0:
+                logger.info(
+                    f"Updated split to '{new_split}' for {updated_count} examples in LangSmith"
+                )
+            else:
+                logger.warning(
+                    "No examples were updated in LangSmith (missing or invalid example IDs)"
+                )
         except Exception as e:
             logger.error(f"Failed to update examples split in LangSmith: {e}")
             raise
@@ -104,7 +136,9 @@ class LangSmithSync:
         try:
             # Note: LangSmith Python client doesn't have a direct delete_dataset method
             # This would need to be implemented via REST API or LangSmith UI
-            logger.info(f"Dataset {dataset_id} should be deleted manually from LangSmith UI")
+            logger.info(
+                f"Dataset {dataset_id} should be deleted manually from LangSmith UI"
+            )
         except Exception as e:
             logger.error(f"Failed to delete dataset from LangSmith: {e}")
             raise
@@ -172,10 +206,10 @@ class LangSmithSync:
         try:
             # Get dataset examples
             examples = list(self.client.list_examples(dataset_id=langsmith_dataset_id))
-            
+
             # Get dataset info
             dataset_info = self.get_dataset_info(langsmith_dataset_id)
-            
+
             return {
                 "dataset_info": dataset_info,
                 "examples": examples,
@@ -183,4 +217,4 @@ class LangSmithSync:
             }
         except Exception as e:
             logger.error(f"Failed to import dataset from LangSmith: {e}")
-            raise 
+            raise

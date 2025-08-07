@@ -1,15 +1,21 @@
 """Dataset manager for handling dataset operations with LangSmith sync."""
 
 import logging
-from typing import List, Dict, Any, Optional, Set
-from datetime import datetime
-from sqlalchemy.orm import Session, joinedload
+from typing import Any, Dict, List, Optional
+
 from sqlalchemy import text
+from sqlalchemy.orm import joinedload
 
 from src.hex_machina.storage.manager import get_storage_manager
-from src.hex_machina.storage.models import DatasetDB, DatasetExampleDB, ArticleDB, EnrichmentDB
-from .langsmith_sync import LangSmithSync
+from src.hex_machina.storage.models import (
+    ArticleDB,
+    DatasetDB,
+    DatasetExampleDB,
+    EnrichmentDB,
+)
+
 from .evaluators import BooleanEvaluator
+from .langsmith_sync import LangSmithSync
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +43,11 @@ class DatasetManager:
                 raise ValueError(f"Dataset '{name}' already exists")
 
             # Get next ID for dataset
-            result = session.execute(text("SELECT COALESCE(MAX(id), 0) + 1 FROM datasets")).fetchone()
+            result = session.execute(
+                text("SELECT COALESCE(MAX(id), 0) + 1 FROM datasets")
+            ).fetchone()
             next_id = result[0] if result else 1
-            
+
             # Create dataset
             dataset = DatasetDB(
                 id=next_id,
@@ -79,12 +87,16 @@ class DatasetManager:
     ) -> int:
         """Add articles to dataset with automatic LangSmith sync."""
         with self.storage.session() as session:
-            dataset = session.query(DatasetDB).filter(DatasetDB.name == dataset_name).first()
+            dataset = (
+                session.query(DatasetDB).filter(DatasetDB.name == dataset_name).first()
+            )
             if not dataset:
                 raise ValueError(f"Dataset '{dataset_name}' not found")
 
             # Get articles
-            articles = session.query(ArticleDB).filter(ArticleDB.id.in_(article_ids)).all()
+            articles = (
+                session.query(ArticleDB).filter(ArticleDB.id.in_(article_ids)).all()
+            )
             if len(articles) != len(article_ids):
                 found_ids = {article.id for article in articles}
                 missing_ids = set(article_ids) - found_ids
@@ -95,14 +107,20 @@ class DatasetManager:
 
             for article in articles:
                 # Check if example already exists
-                existing = session.query(DatasetExampleDB).filter(
-                    DatasetExampleDB.dataset_id == dataset.id,
-                    DatasetExampleDB.article_id == article.id,
-                    DatasetExampleDB.split == split,
-                ).first()
+                existing = (
+                    session.query(DatasetExampleDB)
+                    .filter(
+                        DatasetExampleDB.dataset_id == dataset.id,
+                        DatasetExampleDB.article_id == article.id,
+                        DatasetExampleDB.split == split,
+                    )
+                    .first()
+                )
 
                 if existing:
-                    logger.warning(f"Article {article.id} already in dataset '{dataset_name}' split '{split}'")
+                    logger.warning(
+                        f"Article {article.id} already in dataset '{dataset_name}' split '{split}'"
+                    )
                     continue
 
                 # Create inputs/outputs
@@ -115,9 +133,11 @@ class DatasetManager:
                 outputs = outputs_template or {}
 
                 # Get next ID for example
-                result = session.execute(text("SELECT COALESCE(MAX(id), 0) + 1 FROM dataset_examples")).fetchone()
+                result = session.execute(
+                    text("SELECT COALESCE(MAX(id), 0) + 1 FROM dataset_examples")
+                ).fetchone()
                 next_example_id = result[0] if result else 1
-                
+
                 # Create example
                 example = DatasetExampleDB(
                     id=next_example_id,
@@ -141,17 +161,18 @@ class DatasetManager:
             # Sync to LangSmith
             if dataset.langsmith_dataset_id and examples_to_sync:
                 try:
-                    self.langsmith_sync.add_examples_to_dataset(
+                    langsmith_example_ids = self.langsmith_sync.add_examples_to_dataset(
                         dataset_id=dataset.langsmith_dataset_id,
                         examples=examples_to_sync,
                     )
-                    # Update LangSmith example IDs
-                    for example in examples_to_sync:
-                        # Note: In a real implementation, you'd get the actual LangSmith example ID
-                        # For now, we'll use a placeholder
-                        example.langsmith_example_id = f"langsmith_{example.id}"
+                    # Update LangSmith example IDs with actual IDs
+                    for i, example in enumerate(examples_to_sync):
+                        if i < len(langsmith_example_ids):
+                            example.langsmith_example_id = langsmith_example_ids[i]
                     session.commit()
-                    logger.info(f"Added {added_count} articles to dataset '{dataset_name}' with LangSmith sync")
+                    logger.info(
+                        f"Added {added_count} articles to dataset '{dataset_name}' with LangSmith sync"
+                    )
                 except Exception as e:
                     session.rollback()
                     logger.error(f"Failed to sync examples to LangSmith: {e}")
@@ -169,17 +190,24 @@ class DatasetManager:
         """Create dataset from articles in a workflow operation."""
         with self.storage.session() as session:
             # Get articles from workflow operation
-            articles = session.query(ArticleDB).join(EnrichmentDB).filter(
-                EnrichmentDB.workflow_operation_id == workflow_operation_id
-            ).distinct().all()
+            articles = (
+                session.query(ArticleDB)
+                .join(EnrichmentDB)
+                .filter(EnrichmentDB.workflow_operation_id == workflow_operation_id)
+                .distinct()
+                .all()
+            )
 
             if not articles:
-                raise ValueError(f"No articles found for workflow operation '{workflow_operation_id}'")
+                raise ValueError(
+                    f"No articles found for workflow operation '{workflow_operation_id}'"
+                )
 
             # Create dataset
             dataset = self.create_dataset(
                 name=name,
-                description=description or f"Dataset from workflow operation {workflow_operation_id}",
+                description=description
+                or f"Dataset from workflow operation {workflow_operation_id}",
             )
 
             # Add articles
@@ -198,17 +226,22 @@ class DatasetManager:
         """Create dataset from articles in an ingestion operation."""
         with self.storage.session() as session:
             # Get articles from ingestion operation
-            articles = session.query(ArticleDB).filter(
-                ArticleDB.ingestion_run_id == ingestion_operation_id
-            ).all()
+            articles = (
+                session.query(ArticleDB)
+                .filter(ArticleDB.ingestion_run_id == ingestion_operation_id)
+                .all()
+            )
 
             if not articles:
-                raise ValueError(f"No articles found for ingestion operation {ingestion_operation_id}")
+                raise ValueError(
+                    f"No articles found for ingestion operation {ingestion_operation_id}"
+                )
 
             # Create dataset
             dataset = self.create_dataset(
                 name=name,
-                description=description or f"Dataset from ingestion operation {ingestion_operation_id}",
+                description=description
+                or f"Dataset from ingestion operation {ingestion_operation_id}",
             )
 
             # Add articles
@@ -226,20 +259,28 @@ class DatasetManager:
     ) -> int:
         """Apply boolean evaluator to create custom split."""
         with self.storage.session() as session:
-            dataset = session.query(DatasetDB).filter(DatasetDB.name == dataset_name).first()
+            dataset = (
+                session.query(DatasetDB).filter(DatasetDB.name == dataset_name).first()
+            )
             if not dataset:
                 raise ValueError(f"Dataset '{dataset_name}' not found")
 
             # Get all examples
-            examples = session.query(DatasetExampleDB).filter(
-                DatasetExampleDB.dataset_id == dataset.id
-            ).all()
+            examples = (
+                session.query(DatasetExampleDB)
+                .filter(DatasetExampleDB.dataset_id == dataset.id)
+                .all()
+            )
 
             moved_count = 0
             examples_to_sync = []
 
             for example in examples:
-                article = session.query(ArticleDB).filter(ArticleDB.id == example.article_id).first()
+                article = (
+                    session.query(ArticleDB)
+                    .filter(ArticleDB.id == example.article_id)
+                    .first()
+                )
                 if not article:
                     continue
 
@@ -261,12 +302,16 @@ class DatasetManager:
                         new_split=output_split,
                     )
                     session.commit()
-                    logger.info(f"Moved {moved_count} examples to split '{output_split}' with LangSmith sync")
+                    logger.info(
+                        f"Moved {moved_count} examples to split '{output_split}' with LangSmith sync"
+                    )
                 except Exception as e:
                     logger.error(f"Failed to sync split changes to LangSmith: {e}")
                     # Don't rollback, just commit the local changes
                     session.commit()
-                    logger.info(f"Moved {moved_count} examples to split '{output_split}' (local only)")
+                    logger.info(
+                        f"Moved {moved_count} examples to split '{output_split}' (local only)"
+                    )
 
             return moved_count
 
@@ -281,7 +326,12 @@ class DatasetManager:
     def get_dataset(self, name: str) -> Optional[DatasetDB]:
         """Get dataset by name."""
         with self.storage.session() as session:
-            return session.query(DatasetDB).options(joinedload(DatasetDB.examples)).filter(DatasetDB.name == name).first()
+            return (
+                session.query(DatasetDB)
+                .options(joinedload(DatasetDB.examples))
+                .filter(DatasetDB.name == name)
+                .first()
+            )
 
     def delete_dataset(self, name: str) -> bool:
         """Delete dataset with LangSmith sync."""
@@ -297,6 +347,12 @@ class DatasetManager:
                 except Exception as e:
                     logger.error(f"Failed to delete dataset from LangSmith: {e}")
 
+            # Delete examples first (due to foreign key constraint)
+            session.execute(
+                text("DELETE FROM dataset_examples WHERE dataset_id = :dataset_id"),
+                {"dataset_id": dataset.id},
+            )
+
             # Delete from local database
             session.delete(dataset)
             session.commit()
@@ -310,16 +366,21 @@ class DatasetManager:
     ) -> List[Dict[str, Any]]:
         """List articles in dataset with optional split filtering."""
         with self.storage.session() as session:
-            dataset = session.query(DatasetDB).filter(DatasetDB.name == dataset_name).first()
+            dataset = (
+                session.query(DatasetDB).filter(DatasetDB.name == dataset_name).first()
+            )
             if not dataset:
                 raise ValueError(f"Dataset '{dataset_name}' not found")
 
-            query = session.query(DatasetExampleDB, ArticleDB).join(ArticleDB).filter(
-                DatasetExampleDB.dataset_id == dataset.id
+            query = (
+                session.query(DatasetExampleDB, ArticleDB)
+                .join(ArticleDB)
+                .filter(DatasetExampleDB.dataset_id == dataset.id)
             )
 
             if split:
-                query = query.filter(DatasetExampleDB.split == split)
+                # Handle comma-separated splits - find examples that contain the specified split
+                query = query.filter(DatasetExampleDB.split.contains(split))
 
             results = query.all()
             return [
@@ -332,4 +393,4 @@ class DatasetManager:
                     "created_at": example.created_at,
                 }
                 for example, article in results
-            ] 
+            ]
