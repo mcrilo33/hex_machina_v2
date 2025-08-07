@@ -1,0 +1,32 @@
+task_type: "parser"
+name: "evaluation_result_parser"
+description: "Parse evaluation results from LLM responses"
+
+parser_type: "json"
+schema:
+  is_complete: "boolean"
+  issues: "array"
+  confidence: "string"
+  reasoning: "string"
+
+validation:
+  required_fields: ["is_complete", "confidence"]
+  confidence_values: ["low", "medium", "high"]
+  issue_types: [
+    "missing_content",
+    "truncated_content",
+    "poor_quality",
+    "irrelevant_content",
+    "duplicate_content"
+  ]
+
+error_handling:
+  fallback_values:
+    is_complete: false
+    confidence: "low"
+    issues: ["parsing_error"]
+    reasoning: "Failed to parse evaluation result"
+
+metadata:
+  version: "1.0.0"
+  tags: ["parser", "evaluation", "json"] 
