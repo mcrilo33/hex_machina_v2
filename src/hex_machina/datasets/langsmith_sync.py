@@ -106,7 +106,7 @@ class LangSmithSync:
                     try:
                         # Parse the new_split to handle comma-separated splits
                         splits = [s.strip() for s in new_split.split(",")]
-                        
+
                         # Use update_example with multiple splits
                         self.client.update_example(
                             example_id=example.langsmith_example_id,
