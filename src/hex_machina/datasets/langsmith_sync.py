@@ -104,9 +104,13 @@ class LangSmithSync:
                     and not example.langsmith_example_id.startswith("langsmith_")
                 ):
                     try:
+                        # Parse the new_split to handle comma-separated splits
+                        splits = [s.strip() for s in new_split.split(",")]
+                        
+                        # Use update_example with multiple splits
                         self.client.update_example(
                             example_id=example.langsmith_example_id,
-                            split=new_split,
+                            split=splits,  # LangSmith supports list of splits
                         )
                         updated_count += 1
                     except Exception as e:
@@ -117,7 +121,7 @@ class LangSmithSync:
 
             if updated_count > 0:
                 logger.info(
-                    f"Updated split to '{new_split}' for {updated_count} examples in LangSmith"
+                    f"Updated splits to '{new_split}' for {updated_count} examples in LangSmith"
                 )
             else:
                 logger.warning(

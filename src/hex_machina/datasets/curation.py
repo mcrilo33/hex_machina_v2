@@ -147,15 +147,19 @@ class DatasetCurationManager:
                 # Get annotations
                 annotations = self._get_annotations(annotate_fields)
 
-                                # Create split name
+                # Create split name
                 split_name = self._create_split_name(annotations)
-                
+
                 # Get current splits and append new one
-                current_splits = example.split.split(",") if example.split else []
+                current_splits = (
+                    [s.strip() for s in example.split.split(",")]
+                    if example.split
+                    else []
+                )
                 if split_name not in current_splits:
                     current_splits.append(split_name)
                 new_splits = ",".join(current_splits)
-                
+
                 # Update splits in both LangSmith and local database
                 if dataset.langsmith_dataset_id and example.langsmith_example_id:
                     self.langsmith_sync.update_examples_split(
@@ -163,14 +167,14 @@ class DatasetCurationManager:
                         examples=[example],
                         new_split=new_splits,
                     )
-                
+
                 # Update local database
                 with self.storage_manager.session() as session:
                     session.query(DatasetExampleDB).filter(
                         DatasetExampleDB.id == example.id
                     ).update({"split": new_splits})
                     session.commit()
-                
+
                 print(f"✅ Article {i} → {new_splits}")
 
                 print()  # Empty line for readability
