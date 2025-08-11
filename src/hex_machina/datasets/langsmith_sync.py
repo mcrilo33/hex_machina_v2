@@ -53,7 +53,7 @@ class LangSmithSync:
             raise RuntimeError("LangSmith client not available")
 
         try:
-            # Prepare examples for LangSmith
+            # Prepare examples for LangSmith with proper split handling
             langsmith_examples = []
             for example in examples:
                 langsmith_example = {
@@ -61,6 +61,11 @@ class LangSmithSync:
                     "outputs": example.outputs or {},
                     "metadata": example.example_metadata or {},
                 }
+
+                # Add split information if available
+                if example.split:
+                    langsmith_example["split"] = example.split
+
                 langsmith_examples.append(langsmith_example)
 
             # Add examples in bulk
@@ -91,44 +96,59 @@ class LangSmithSync:
         examples: List[DatasetExampleDB],
         new_split: str,
     ) -> None:
-        """Update examples split in LangSmith."""
+        """Update examples split in LangSmith using proper Client methods."""
         if not self.client:
             raise RuntimeError("LangSmith client not available")
 
         try:
             updated_count = 0
-            # Update each example's split
+            # Update each example's split using the proper LangSmith Client method
             for example in examples:
-                if (
-                    example.langsmith_example_id
-                    and not example.langsmith_example_id.startswith("langsmith_")
-                ):
+                if example.langsmith_example_id:
                     try:
-                        # Parse the new_split to handle comma-separated splits
-                        splits = [s.strip() for s in new_split.split(",")]
-
-                        # Use update_example with multiple splits
+                        # Use the proper update_example method from LangSmith Client
                         self.client.update_example(
                             example_id=example.langsmith_example_id,
-                            split=splits,  # LangSmith supports list of splits
+                            split=new_split,
                         )
                         updated_count += 1
                     except Exception as e:
                         logger.warning(
-                            f"Failed to update example {example.langsmith_example_id}: {e}"
+                            f"Failed to update example {example.langsmith_example_id} split: {e}"
                         )
                         continue
 
-            if updated_count > 0:
-                logger.info(
-                    f"Updated splits to '{new_split}' for {updated_count} examples in LangSmith"
-                )
-            else:
-                logger.warning(
-                    "No examples were updated in LangSmith (missing or invalid example IDs)"
-                )
+            logger.info(
+                f"Updated splits to '{new_split}' for {updated_count} examples in LangSmith"
+            )
         except Exception as e:
             logger.error(f"Failed to update examples split in LangSmith: {e}")
+            raise
+
+    def update_dataset_splits(
+        self,
+        dataset_id: str,
+        split_name: str,
+        example_ids: List[str],
+        remove: bool = False,
+    ) -> None:
+        """Update dataset splits in LangSmith using proper Client methods."""
+        if not self.client:
+            raise RuntimeError("LangSmith client not available")
+
+        try:
+            # Use the proper update_dataset_splits method from LangSmith Client
+            self.client.update_dataset_splits(
+                dataset_id=dataset_id,
+                split_name=split_name,
+                example_ids=example_ids,
+                remove=remove,
+            )
+            logger.info(
+                f"Updated dataset {dataset_id} split '{split_name}' with {len(example_ids)} examples"
+            )
+        except Exception as e:
+            logger.error(f"Failed to update dataset splits in LangSmith: {e}")
             raise
 
     def delete_dataset(self, dataset_id: str) -> None:
