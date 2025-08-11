@@ -68,7 +68,12 @@ def tasks_cli():
 @click.option(
     "--format", type=click.Choice(["json", "csv"]), default="json", help="Output format"
 )
-@click.option("--save-to-db", is_flag=True, help="Force save to database")
+@click.option(
+    "--save-to-db",
+    is_flag=True,
+    default=True,
+    help="Save enrichments to database (default: True)",
+)
 @click.option("--no-save-to-db", is_flag=True, help="Disable database saving")
 def run(
     task,
@@ -158,10 +163,38 @@ def run(
             click.echo(f"   Limit: {limit}")
         if skip_existing:
             click.echo("   Skip existing: Yes")
+        click.echo(f"   Save to database: {not no_save_to_db}")
+
+        # Show the actual workflow operation ID that will be generated
+        import uuid
+        from datetime import datetime
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        short_uuid = uuid.uuid4().hex[:8]
+        workflow_operation_id = f"{task}_{timestamp}_{short_uuid}"
+        click.echo(f"   Workflow Operation ID: {workflow_operation_id}")
+        click.echo(f"   Individual Task IDs: {workflow_operation_id}_task_[uuid]")
         return
+
+    # Determine database saving behavior
+    # Default is to save to DB unless --no-save-to-db is explicitly set
+    save_to_database = not no_save_to_db
 
     # Run the task
     click.echo(f"🚀 Running task '{task}' on {article_count} articles...")
+    if save_to_database:
+        click.echo("💾 Enrichments will be saved to database")
+    else:
+        click.echo("⚠️  Database saving is disabled")
+
+    # Generate a single workflow operation ID for this entire CLI run
+    import uuid
+    from datetime import datetime
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    short_uuid = uuid.uuid4().hex[:8]
+    workflow_operation_id = f"{task}_{timestamp}_{short_uuid}"
+    click.echo(f"🔗 Workflow Operation ID: {workflow_operation_id}")
 
     try:
         results = asyncio.run(
@@ -173,11 +206,28 @@ def run(
                 max_concurrent=max_concurrent,
                 skip_existing=skip_existing,
                 limit=limit,
+                save_to_db=save_to_database,
+                workflow_operation_id=workflow_operation_id,
             )
         )
 
         # Display results
         click.echo(f"✅ Completed! Processed {len(results)} articles")
+
+        # Show workflow operation information (every task now has one)
+        if results and hasattr(results[0], "metadata") and results[0].metadata:
+            task_input_data = results[0].metadata.get("task_input", {})
+            workflow_id = task_input_data.get("workflow_operation_id")
+            if workflow_id:
+                click.echo(f"🔗 Workflow Operation ID: {workflow_id}")
+                if len(results) > 1:
+                    click.echo(
+                        f"   This groups all {len(results)} task executions together"
+                    )
+                else:
+                    click.echo(
+                        "   This represents a single task execution within a workflow context"
+                    )
 
         # Save results to file if output directory specified
         if output_dir:
@@ -239,6 +289,9 @@ def _save_results_to_file(results, output_dir, format):
                 writer.writerow(
                     {
                         "task_id": result.task_id,
+                        "workflow_operation_id": getattr(
+                            result, "workflow_operation_id", None
+                        ),
                         "task_name": result.task_name,
                         "execution_time": result.execution_time,
                         "error": result.error,

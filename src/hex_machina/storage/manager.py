@@ -131,6 +131,7 @@ class StorageManager:
 
 # Global storage manager instance
 _storage_manager = None
+_last_db_path = None
 
 
 def get_storage_manager(db_path: str = "data/hex_machina.db") -> StorageManager:
@@ -142,7 +143,11 @@ def get_storage_manager(db_path: str = "data/hex_machina.db") -> StorageManager:
     Returns:
         StorageManager instance
     """
-    global _storage_manager
-    if _storage_manager is None:
+    global _storage_manager, _last_db_path
+
+    # If database path changed or no instance exists, create a new one
+    if _storage_manager is None or _last_db_path != db_path:
         _storage_manager = StorageManager(db_path)
+        _last_db_path = db_path
+
     return _storage_manager

@@ -1,0 +1,120 @@
+# Evaluation Configuration
+# This file defines which LLMs to use for different evaluators
+
+evaluators:
+  # Criteria evaluators (specific criteria)
+  criteria_completeness:
+    llm:
+      provider: "openrouter"
+      model: "openai/gpt-4o-mini"
+      temperature: 0
+      max_tokens: 1000
+    criteria:
+      completeness: "Is the output complete and comprehensive?"
+    
+  criteria_accuracy:
+    llm:
+      provider: "openrouter"
+      model: "openai/gpt-4o-mini"
+      temperature: 0
+      max_tokens: 1000
+    criteria:
+      accuracy: "Is the output accurate and correct?"
+    
+  criteria_relevance:
+    llm:
+      provider: "openrouter"
+      model: "openai/gpt-4o-mini"
+      temperature: 0
+      max_tokens: 1000
+    criteria:
+      relevance: "Is the output relevant to the input?"
+    
+  criteria_clarity:
+    llm:
+      provider: "openrouter"
+      model: "openai/gpt-4o-mini"
+      temperature: 0
+      max_tokens: 1000
+    criteria:
+      clarity: "Is the output clear and well-written?"
+    
+  criteria_coherence:
+    llm:
+      provider: "openrouter"
+      model: "openai/gpt-4o-mini"
+      temperature: 0
+      max_tokens: 1000
+    criteria:
+      coherence: "Is the output logically coherent and well-structured?"
+    
+  # QA evaluator
+  qa:
+    llm:
+      provider: "openrouter"
+      model: "openai/gpt-4o-mini"
+      temperature: 0
+      max_tokens: 1000
+    
+  # Embedding distance evaluator
+  embedding_distance:
+    llm:
+      provider: "openrouter"
+      model: "openai/text-embedding-ada-002"
+      temperature: 0
+    
+  # String distance evaluator
+  string_distance:
+    llm:
+      provider: "openrouter"
+      model: "openai/gpt-4o-mini"
+      temperature: 0
+      max_tokens: 1000
+    
+  # Ground truth evaluators
+  labeled_criteria_completeness:
+    llm:
+      provider: "openrouter"
+      model: "openai/gpt-4o-mini"
+      temperature: 0
+      max_tokens: 1000
+    criteria:
+      - "completeness"
+    
+  labeled_criteria_accuracy:
+    llm:
+      provider: "openrouter"
+      model: "openai/gpt-4o-mini"
+      temperature: 0
+      max_tokens: 1000
+    criteria:
+      - "accuracy"
+    
+  labeled_criteria_relevance:
+    llm:
+      provider: "openrouter"
+      model: "openai/gpt-4o-mini"
+      temperature: 0
+      max_tokens: 1000
+    criteria:
+      - "relevance"
+
+# LLM providers configuration
+providers:
+  openrouter:
+    api_base: "https://openrouter.ai/api/v1"
+    api_key_env: "OPENROUTER_API_KEY"
+  
+  openai:
+    api_base: "https://api.openai.com/v1"
+    api_key_env: "OPENAI_API_KEY"
+  
+  anthropic:
+    api_base: "https://api.anthropic.com"
+    api_key_env: "ANTHROPIC_API_KEY"
+
+# Default settings
+defaults:
+  temperature: 0
+  max_tokens: 1000
+  timeout: 30

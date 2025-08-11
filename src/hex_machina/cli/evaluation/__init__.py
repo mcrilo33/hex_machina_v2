@@ -1,6 +1,7 @@
-"""Evaluation CLI for evaluation metrics and experiments."""
+"""
+Evaluation CLI module.
+"""
 
-# TODO: Implement evaluation CLI
-# This will handle evaluation metrics, experiments, LangSmith evaluation sync, etc.
+from .main import evaluation
 
-__all__ = []
+__all__ = ["evaluation"]

@@ -74,6 +74,11 @@ class LangSmithTracer:
         metadata = {
             "task_name": str(task_name),
             "task_id": str(task_input.task_id),
+            "workflow_operation_id": (
+                str(task_input.workflow_operation_id)
+                if task_input.workflow_operation_id
+                else "standalone"
+            ),
             "execution_time": str(task_output.execution_time),
             "success": str(not bool(task_output.error)),
             "project": str(self.project_name),
@@ -211,8 +216,25 @@ class LangSmithTracer:
                 run_type="chain",
                 name=task_input.task_id,
                 inputs={"task_input": task_input.model_dump()},
-                tags=[f"task:{task_name}"],
-                metadata={"task_name": task_name, "task_id": task_input.task_id},
+                tags=[
+                    f"task:{task_name}",
+                    (
+                        f"workflow:{task_input.workflow_operation_id}"
+                        if task_input.workflow_operation_id
+                        else "workflow:standalone"
+                    ),
+                ],
+                metadata={
+                    "task_name": task_name,
+                    "task_id": task_input.task_id,
+                    "workflow_operation_id": task_input.workflow_operation_id,
+                    "workflow_context": (
+                        "batch"
+                        if task_input.workflow_operation_id
+                        and not task_input.workflow_operation_id.endswith("_standalone")
+                        else "standalone"
+                    ),
+                },
             ) as parent_run:
 
                 # Span 1: Input Validation
@@ -221,8 +243,20 @@ class LangSmithTracer:
                     run_type="tool",
                     name="input_validation",
                     inputs={"task_input": task_input.model_dump()},
-                    tags=[f"task:{task_name}", "phase:validation"],
-                    metadata={"task_name": task_name, "phase": "input_validation"},
+                    tags=[
+                        f"task:{task_name}",
+                        "phase:validation",
+                        (
+                            f"workflow:{task_input.workflow_operation_id}"
+                            if task_input.workflow_operation_id
+                            else "workflow:standalone"
+                        ),
+                    ],
+                    metadata={
+                        "task_name": task_name,
+                        "phase": "input_validation",
+                        "workflow_operation_id": task_input.workflow_operation_id,
+                    },
                 ) as validation_span:
                     # Validate input
                     if not task.validate_input(task_input):
@@ -247,8 +281,20 @@ class LangSmithTracer:
                     inputs={
                         "raw_output": str(getattr(task, "_last_chain_result", None))
                     },
-                    tags=[f"task:{task_name}", "phase:parsing"],
-                    metadata={"task_name": task_name, "phase": "output_parsing"},
+                    tags=[
+                        f"task:{task_name}",
+                        "phase:parsing",
+                        (
+                            f"workflow:{task_input.workflow_operation_id}"
+                            if task_input.workflow_operation_id
+                            else "workflow:standalone"
+                        ),
+                    ],
+                    metadata={
+                        "task_name": task_name,
+                        "phase": "output_parsing",
+                        "workflow_operation_id": task_input.workflow_operation_id,
+                    },
                 ) as parsing_span:
                     # Process and validate the result
                     chain_result = getattr(task, "_last_chain_result", None)

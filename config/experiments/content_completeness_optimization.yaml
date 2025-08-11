@@ -1,0 +1,70 @@
+# Content Completeness Task Optimization Experiment
+# This experiment tests different configurations for the ContentCompletenessLangChainTask
+
+experiment_name: "content_completeness_optimization"
+description: "Find optimal configuration for ContentCompletenessLangChainTask"
+created_at: "2025-08-07"
+
+# Dataset to use for evaluation
+evaluation_dataset: "test-workflow-dataset-v2"
+evaluation_split: "train"
+
+# Evaluators to use for comparison
+evaluators:
+  - criteria_completeness
+  - criteria_accuracy
+  - criteria_relevance
+
+# Task configurations to test
+task_configs:
+  - name: "baseline"
+    description: "Current configuration"
+    config:
+      model: "openai/gpt-4o-mini"
+      temperature: 0
+      max_tokens: 1000
+      prompt_template: "current"
+  
+  - name: "high_temp"
+    description: "Higher temperature for creativity"
+    config:
+      model: "openai/gpt-4o-mini"
+      temperature: 0.3
+      max_tokens: 1000
+      prompt_template: "current"
+  
+  - name: "low_temp"
+    description: "Lower temperature for consistency"
+    config:
+      model: "openai/gpt-4o-mini"
+      temperature: 0.1
+      max_tokens: 1000
+      prompt_template: "current"
+  
+  - name: "more_tokens"
+    description: "Higher token limit for detailed responses"
+    config:
+      model: "openai/gpt-4o-mini"
+      temperature: 0
+      max_tokens: 2000
+      prompt_template: "current"
+  
+  - name: "different_model"
+    description: "Try different model"
+    config:
+      model: "openai/gpt-3.5-turbo"
+      temperature: 0
+      max_tokens: 1000
+      prompt_template: "current"
+
+# Comparison metrics
+comparison_metrics:
+  primary: "criteria_completeness"
+  secondary: ["criteria_accuracy", "criteria_relevance"]
+  threshold: 0.8  # Minimum acceptable score
+
+# Experiment settings
+settings:
+  max_concurrent_runs: 3
+  timeout_per_run: 300  # seconds
+  save_intermediate_results: true

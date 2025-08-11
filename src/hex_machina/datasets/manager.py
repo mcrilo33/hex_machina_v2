@@ -344,13 +344,19 @@ class DatasetManager:
                     )
                     continue
 
-                # Create inputs/outputs
-                inputs = inputs_template or {
-                    "article_id": article.id,
-                    "title": article.title,
-                    "text_content": article.text_content,
-                    "url": article.url,
-                }
+                # Create inputs/outputs - use custom template if provided, otherwise use default
+                if inputs_template:
+                    # Use the provided comprehensive template
+                    inputs = inputs_template
+                else:
+                    # Use default template
+                    inputs = {
+                        "article_id": article.id,
+                        "title": article.title,
+                        "text_content": article.text_content,
+                        "url": article.url,
+                    }
+
                 outputs = outputs_template or {}
 
                 # Get next ID for example
@@ -371,6 +377,25 @@ class DatasetManager:
                         "article_title": article.title,
                         "article_url": article.url,
                         "article_domain": article.url_domain,
+                        "published_date": (
+                            article.published_date.isoformat()
+                            if article.published_date
+                            else None
+                        ),
+                        "author": article.author,
+                        "source_url": article.source_url,
+                        # Add flattened enrichment data directly as individual metadata fields
+                        **{
+                            f"enrichment_{enrichment.enrichment_type}_{flat_key}": flat_value
+                            for enrichment in (
+                                session.query(EnrichmentDB)
+                                .filter(EnrichmentDB.article_id == article.id)
+                                .all()
+                            )
+                            for flat_key, flat_value in self._flatten_dict_recursively(
+                                enrichment.enrichment_data
+                            ).items()
+                        },
                     },
                 )
                 session.add(example)
@@ -408,7 +433,7 @@ class DatasetManager:
         split: str = "train",
         description: Optional[str] = None,
     ) -> DatasetDB:
-        """Create dataset from articles in a workflow operation."""
+        """Create dataset from articles in a workflow operation with comprehensive data."""
         with self.storage.session() as session:
             # Get articles from workflow operation
             articles = (
@@ -431,11 +456,36 @@ class DatasetManager:
                 or f"Dataset from workflow operation {workflow_operation_id}",
             )
 
-            # Add ALL articles to the base split first
+            # Add ALL articles to the base split first with comprehensive data
             article_ids = [article.id for article in articles]
-            self.add_articles_to_dataset(
-                name, article_ids, split=None
-            )  # None = default split
+
+            # Get enrichments for each article in this workflow
+            enrichments_map = {}
+            for article in articles:
+                article_enrichments = (
+                    session.query(EnrichmentDB)
+                    .filter(
+                        EnrichmentDB.article_id == article.id,
+                        EnrichmentDB.workflow_operation_id == workflow_operation_id,
+                    )
+                    .all()
+                )
+                enrichments_map[article.id] = article_enrichments
+
+            # Add articles with comprehensive data
+            for article in articles:
+                # Create comprehensive inputs for this article
+                comprehensive_inputs = self._create_comprehensive_inputs(
+                    article, enrichments_map[article.id]
+                )
+
+                # Add single article with comprehensive data
+                self.add_articles_to_dataset(
+                    name,
+                    [article.id],
+                    split=None,  # None = default split
+                    inputs_template=comprehensive_inputs,
+                )
 
             # Now create the small split (which will add the first 3 articles to small split as well)
             self._create_small_split_from_articles(name, articles, max_items=3)
@@ -870,3 +920,116 @@ class DatasetManager:
                 }
                 for example, article in results
             ]
+
+    def _flatten_dict_recursively(self, data: Any, prefix: str = "") -> Dict[str, Any]:
+        """Recursively flatten nested dictionaries, including nested nested dicts.
+
+        Args:
+            data: Data to flatten (can be dict, list, or primitive)
+            prefix: Prefix for flattened keys
+
+        Returns:
+            Flattened dictionary with dot notation for nested keys
+        """
+        if isinstance(data, dict):
+            flattened = {}
+            for key, value in data.items():
+                new_key = f"{prefix}.{key}" if prefix else key
+                if isinstance(value, dict):
+                    # Recursively flatten nested dictionaries
+                    nested_flattened = self._flatten_dict_recursively(value, new_key)
+                    flattened.update(nested_flattened)
+                elif isinstance(value, list):
+                    # Handle lists by flattening each item if it's a dict
+                    for i, item in enumerate(value):
+                        if isinstance(item, dict):
+                            list_flattened = self._flatten_dict_recursively(
+                                item, f"{new_key}[{i}]"
+                            )
+                            flattened.update(list_flattened)
+                        else:
+                            flattened[f"{new_key}[{i}]"] = item
+                else:
+                    flattened[new_key] = value
+            return flattened
+        else:
+            return {prefix: data} if prefix else {}
+
+    def _create_comprehensive_inputs(
+        self, article: ArticleDB, enrichments: List[EnrichmentDB]
+    ) -> Dict[str, Any]:
+        """Create comprehensive inputs including all article data and flattened enrichments.
+
+        Args:
+            article: Article database object
+            enrichments: List of enrichments for this article
+
+        Returns:
+            Dictionary with all article attributes (except html_content) and flattened enrichments
+
+        Raises:
+            ValueError: If multiple enrichments have same type and timestamp (naming conflict)
+        """
+        inputs = {
+            # All article attributes except html_content
+            "article_id": article.id,
+            "title": article.title,
+            "text_content": article.text_content,  # Keep processed text
+            "url": article.url,
+            "source_url": article.source_url,
+            "url_domain": article.url_domain,
+            "published_date": (
+                article.published_date.isoformat() if article.published_date else None
+            ),
+            "author": article.author,
+            "article_metadata": article.article_metadata,
+            "ingestion_metadata": article.ingestion_metadata,
+            "ingested_at": (
+                article.ingested_at.isoformat() if article.ingested_at else None
+            ),
+        }
+
+        # Flatten enrichments with clean naming pattern: enrichment_<type> (latest version only)
+        enrichment_fields = {}
+
+        # Group enrichments by type and get the latest for each
+        enrichments_by_type = {}
+        for enrichment in enrichments:
+            if enrichment.enrichment_type not in enrichments_by_type:
+                enrichments_by_type[enrichment.enrichment_type] = []
+            enrichments_by_type[enrichment.enrichment_type].append(enrichment)
+
+        # For each type, take the latest enrichment
+        for enrichment_type, type_enrichments in enrichments_by_type.items():
+            if len(type_enrichments) > 1:
+                # Sort by created_at and take the latest
+                latest_enrichment = max(type_enrichments, key=lambda e: e.created_at)
+                logger.warning(
+                    f"Multiple enrichments of type '{enrichment_type}' found for article {article.id}. "
+                    f"Using latest from {latest_enrichment.created_at}"
+                )
+            else:
+                latest_enrichment = type_enrichments[0]
+
+            # Create clean field name: enrichment_<type>
+            field_name = f"enrichment_{enrichment_type}"
+
+            # Include all enrichment data
+            enrichment_fields[field_name] = {
+                "data": latest_enrichment.enrichment_data,
+                "source": latest_enrichment.source,
+                "tool_name": latest_enrichment.tool_name,
+                "tool_params": latest_enrichment.tool_params,
+                "version": latest_enrichment.version,
+                "created_at": (
+                    latest_enrichment.created_at.isoformat()
+                    if latest_enrichment.created_at
+                    else None
+                ),
+                "workflow_operation_id": latest_enrichment.workflow_operation_id,
+            }
+
+        # Add flattened enrichments to inputs
+        inputs.update(enrichment_fields)
+
+        return inputs

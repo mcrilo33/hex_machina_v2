@@ -16,45 +16,35 @@ def manage():
 
 
 @manage.command()
-@click.argument("name")
-@click.option("--description", help="Dataset description")
-@click.option("--data-type", default="kv", help="Data type (kv, chat)")
-@click.option("--metadata", help="JSON metadata")
-def create(name, description, data_type, metadata):
-    """Create a new dataset."""
-    try:
-        manager = DatasetManager()
-
-        # Parse metadata if provided
-        metadata_dict = None
-        if metadata:
-            try:
-                metadata_dict = json.loads(metadata)
-            except json.JSONDecodeError:
-                click.echo("❌ Invalid JSON metadata")
-                return
-
-        dataset = manager.create_dataset(
-            name=name,
-            description=description,
-            data_type=data_type,
-            metadata=metadata_dict,
-        )
-
-        click.echo(f"✅ Created dataset '{name}' (ID: {dataset.id})")
-        if dataset.langsmith_dataset_id:
-            click.echo(f"🔗 Synced to LangSmith: {dataset.langsmith_dataset_id}")
-
-    except Exception as e:
-        click.echo(f"❌ Error creating dataset: {e}")
-
-
-@manage.command()
 @click.option("--name-contains", help="Filter datasets by name")
-def list(name_contains):
+@click.option(
+    "--no-auto-sync", is_flag=True, help="Disable automatic sync with LangSmith"
+)
+def list(name_contains, no_auto_sync):
     """List all datasets."""
     try:
         manager = DatasetManager()
+
+        # Auto-sync if not disabled (default)
+        if not no_auto_sync:
+            click.echo("🔄 Auto-syncing datasets with LangSmith...")
+            try:
+                sync_results = manager.sync_all_datasets(
+                    force=False, project="hex-machina-v2"
+                )
+                if (
+                    sync_results["created_local"] > 0
+                    or sync_results["removed_local"] > 0
+                ):
+                    click.echo(
+                        f"   📥 Synced {sync_results['created_local']} local datasets"
+                    )
+                    click.echo(
+                        f"   🗑️  Removed {sync_results['removed_local']} local datasets"
+                    )
+            except Exception as e:
+                click.echo(f"   ⚠️  Auto-sync warning: {e}")
+
         datasets = manager.list_datasets(name_contains=name_contains)
 
         if not datasets:
@@ -100,7 +90,7 @@ def view(name):
         click.echo(f"   Created: {dataset.created_at}")
         click.echo(f"   Updated: {dataset.updated_at}")
 
-                # Show split distribution
+        # Show split distribution
         splits = {}
         for example in dataset.examples:
             if example.split:
@@ -110,27 +100,13 @@ def view(name):
                     splits[split] = splits.get(split, 0) + 1
             else:
                 splits["no_split"] = splits.get("no_split", 0) + 1
-            
+
         click.echo("\n📊 Split Distribution:")
         for split, count in splits.items():
             click.echo(f"   {split}: {count} examples")
 
     except Exception as e:
         click.echo(f"❌ Error viewing dataset: {e}")
-
-
-@manage.command()
-@click.argument("name")
-def delete(name):
-    """Delete a dataset."""
-    try:
-        manager = DatasetManager()
-        if manager.delete_dataset(name):
-            click.echo(f"✅ Deleted dataset '{name}'")
-        else:
-            click.echo(f"❌ Dataset '{name}' not found")
-    except Exception as e:
-        click.echo(f"❌ Error deleting dataset: {e}")
 
 
 @manage.command()
@@ -177,9 +153,17 @@ def create_from_workflow(dataset, workflow_operation_id, split, description):
         click.echo(
             f"✅ Created dataset '{dataset}' from workflow operation '{workflow_operation_id}'"
         )
-        click.echo(f"   Examples: {len(dataset_obj.examples)}")
-        if dataset_obj.langsmith_dataset_id:
-            click.echo(f"   🔗 Synced to LangSmith: {dataset_obj.langsmith_dataset_id}")
+
+        # Get fresh dataset data for display
+        fresh_dataset = manager.get_dataset(dataset)
+        if fresh_dataset:
+            click.echo(f"   Examples: {len(fresh_dataset.examples)}")
+            if fresh_dataset.langsmith_dataset_id:
+                click.echo(
+                    f"   🔗 Synced to LangSmith: {fresh_dataset.langsmith_dataset_id}"
+                )
+        else:
+            click.echo("   ⚠️  Could not retrieve dataset details for display")
 
     except Exception as e:
         click.echo(f"❌ Error creating dataset from workflow: {e}")
@@ -204,9 +188,17 @@ def create_from_ingestion(dataset, ingestion_operation_id, split, description):
         click.echo(
             f"✅ Created dataset '{dataset}' from ingestion operation {ingestion_operation_id}"
         )
-        click.echo(f"   Examples: {len(dataset_obj.examples)}")
-        if dataset_obj.langsmith_dataset_id:
-            click.echo(f"   🔗 Synced to LangSmith: {dataset_obj.langsmith_dataset_id}")
+
+        # Get fresh dataset data for display
+        fresh_dataset = manager.get_dataset(dataset)
+        if fresh_dataset:
+            click.echo(f"   Examples: {len(fresh_dataset.examples)}")
+            if fresh_dataset.langsmith_dataset_id:
+                click.echo(
+                    f"   🔗 Synced to LangSmith: {fresh_dataset.langsmith_dataset_id}"
+                )
+        else:
+            click.echo("   ⚠️  Could not retrieve dataset details for display")
 
     except Exception as e:
         click.echo(f"❌ Error creating dataset from ingestion: {e}")
@@ -269,6 +261,30 @@ def list_evaluators():
 
 @manage.command()
 @click.argument("dataset")
+@click.option(
+    "--max-items", type=int, default=3, help="Maximum number of items in small split"
+)
+@click.option("--split-name", default="small", help="Name for the small split")
+def create_small_split(dataset, max_items, split_name):
+    """Create a small split with first few articles for quick testing."""
+    try:
+        manager = DatasetManager()
+        added_count = manager.create_small_split(
+            dataset_name=dataset,
+            max_items=max_items,
+            split_name=split_name,
+        )
+
+        click.echo(
+            f"✅ Created '{split_name}' split for dataset '{dataset}' with {added_count} articles"
+        )
+
+    except Exception as e:
+        click.echo(f"❌ Error creating small split: {e}")
+
+
+@manage.command()
+@click.argument("dataset")
 @click.option("--split", help="Filter by split")
 def list_articles(dataset, split):
     """List articles in dataset."""
@@ -288,15 +304,39 @@ def list_articles(dataset, split):
         for article in articles:
             click.echo(f"📝 {article['article_id']}: {article['title'][:60]}...")
             click.echo(f"   URL: {article['url']}")
-            if article['split']:
-                splits = [s.strip() for s in article['split'].split(",")]
+            if article["split"]:
+                splits = [s.strip() for s in article["split"].split(",")]
                 click.echo(f"   Splits: {', '.join(splits)}")
             else:
-                click.echo(f"   Split: none")
+                click.echo("   Split: none")
             click.echo()
 
     except Exception as e:
         click.echo(f"❌ Error listing articles: {e}")
+
+
+@manage.command()
+@click.option("--force", is_flag=True, help="Force sync even if datasets exist locally")
+@click.option("--project", default="hex-machina-v2", help="LangSmith project name")
+def sync_all(force, project):
+    """Sync all datasets between LangSmith and local database."""
+    try:
+        manager = DatasetManager()
+        click.echo("🔄 Syncing all datasets between LangSmith and local database...")
+
+        # Get sync results
+        sync_results = manager.sync_all_datasets(force=force, project=project)
+
+        click.echo("\n✅ Sync completed!")
+        click.echo(f"   �� Created locally: {sync_results['created_local']}")
+        click.echo(f"   🗑️  Removed locally: {sync_results['removed_local']}")
+        click.echo(f"   ❌ Errors: {sync_results['errors']}")
+
+        if sync_results["errors"]:
+            click.echo("\n⚠️  Some errors occurred during sync. Check logs for details.")
+
+    except Exception as e:
+        click.echo(f"❌ Error during sync: {e}")
 
 
 @manage.command()

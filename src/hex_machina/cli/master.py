@@ -2,6 +2,9 @@
 
 import click
 
+from .datasets.main import manage
+from .evaluation.main import evaluation
+from .experiments.main import experiments
 from .tasks import tasks_cli
 
 
@@ -17,13 +20,14 @@ def master_cli():
 
 # Add sub-commands for each CLI
 master_cli.add_command(tasks_cli, name="tasks")
+master_cli.add_command(manage, name="datasets")
+master_cli.add_command(evaluation, name="evaluation")
+master_cli.add_command(experiments, name="experiments")
 
 
 # TODO: Add other CLIs when implemented
 # master_cli.add_command(workflows_cli, name="workflows")
-# master_cli.add_command(datasets_cli, name="datasets")
 # master_cli.add_command(prompts_cli, name="prompts")
-# master_cli.add_command(evaluation_cli, name="evaluation")
 
 
 if __name__ == "__main__":
