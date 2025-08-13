@@ -7,7 +7,9 @@ LangChain built-in runnables.
 """
 
 import importlib
+import inspect
 import logging
+from pathlib import Path
 from typing import Any, Dict, Optional, Type, Union
 
 from langchain_core.runnables import Runnable
@@ -122,9 +124,10 @@ class RunnableRegistry(Runnable):
                 self._logger.debug(f"Failed to discover {class_name}: {e}")
 
     def _auto_discover_custom_runnables(self) -> None:
-        """Auto-discover custom runnables from the runnables module."""
+        """Auto-discover custom runnables from the runnables module and custom_runnables package."""
         self._logger.info("Auto-discovering custom runnables...")
 
+        # Discover from runnables module (existing functionality)
         try:
             # Import the runnables module to trigger registration
             from . import runnables
@@ -154,7 +157,50 @@ class RunnableRegistry(Runnable):
         except ImportError as e:
             self._logger.debug(f"Could not import runnables module: {e}")
         except Exception as e:
-            self._logger.debug(f"Failed to auto-discover custom runnables: {e}")
+            self._logger.debug(
+                f"Failed to auto-discover custom runnables from runnables module: {e}"
+            )
+
+        # Discover from custom_runnables package (new functionality)
+        try:
+            # Import the custom_runnables package
+            custom_package = importlib.import_module("langchain_tasks.custom_runnables")
+
+            # Get the package path
+            package_path = Path(custom_package.__file__).parent
+
+            # Discover Python files in the package
+            for py_file in package_path.glob("*.py"):
+                if py_file.name.startswith("__"):
+                    continue
+
+                # Import the module
+                module_name = f"langchain_tasks.custom_runnables.{py_file.stem}"
+                try:
+                    module = importlib.import_module(module_name)
+
+                    # Look for runnable classes in the module
+                    for name, obj in inspect.getmembers(module):
+                        if (
+                            inspect.isclass(obj)
+                            and issubclass(obj, Runnable)
+                            and obj != Runnable
+                        ):
+                            # Register the custom runnable
+                            self._custom_registry[name] = obj
+                            self._logger.info(
+                                f"Auto-discovered custom runnable: {name} from {module_name}"
+                            )
+
+                except Exception as e:
+                    self._logger.warning(
+                        f"Failed to import custom runnable module {module_name}: {e}"
+                    )
+
+        except Exception as e:
+            self._logger.debug(
+                f"Failed to auto-discover custom runnables from custom_runnables package: {e}"
+            )
 
     def _register_custom_runnables(self) -> None:
         """Register custom runnables from configuration."""

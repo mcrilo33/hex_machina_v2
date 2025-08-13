@@ -6,6 +6,9 @@ following LangSmith's evaluation philosophy.
 """
 
 import logging
+import importlib
+import inspect
+from pathlib import Path
 from typing import Any, Callable, Dict, List
 
 # Import available evaluators from langchain
@@ -46,6 +49,9 @@ class EvaluatorRegistry:
 
         # Register built-in evaluators
         self._register_builtin_evaluators()
+        
+        # Auto-discover and register custom evaluators
+        self._auto_discover_custom_evaluators()
 
     def _register_builtin_evaluators(self):
         """Register built-in LangSmith evaluators."""
@@ -180,6 +186,42 @@ class EvaluatorRegistry:
             }
 
         raise ValueError(f"Evaluator '{name}' not found")
+
+    def _auto_discover_custom_evaluators(self):
+        """Auto-discover custom evaluators from the custom_evaluators package."""
+        try:
+            # Import the custom evaluators package using relative import
+            custom_package = importlib.import_module(".custom_evaluators", package="langchain_tasks.evaluation")
+            
+            # Get the package path
+            package_path = Path(custom_package.__file__).parent
+            
+            # Discover Python files in the package
+            for py_file in package_path.glob("*.py"):
+                if py_file.name.startswith("__"):
+                    continue
+                    
+                # Import the module
+                module_name = f"langchain_tasks.evaluation.custom_evaluators.{py_file.stem}"
+                try:
+                    module = importlib.import_module(module_name)
+                    
+                    # Look for evaluator functions in the module
+                    for name, obj in inspect.getmembers(module):
+                        if inspect.isfunction(obj) and hasattr(obj, "__name__"):
+                            # Check if it's an evaluator function (takes run and example parameters)
+                            sig = inspect.signature(obj)
+                            params = list(sig.parameters.keys())
+                            
+                            if len(params) >= 2 and "run" in params and "example" in params:
+                                self._custom_evaluators[name] = obj
+                                self._logger.info(f"Auto-discovered custom evaluator: {name}")
+                                
+                except Exception as e:
+                    self._logger.warning(f"Failed to import custom evaluator module {module_name}: {e}")
+                    
+        except Exception as e:
+            self._logger.warning(f"Failed to auto-discover custom evaluators: {e}")
 
 
 # Global registry instance
