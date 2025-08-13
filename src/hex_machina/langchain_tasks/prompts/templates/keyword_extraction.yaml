@@ -1,0 +1,3 @@
+name: "keyword_extraction"
+description: "Extract keywords from text content"
+template: "Extract keywords from the following text: {text_content}"

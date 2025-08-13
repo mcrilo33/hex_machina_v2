@@ -13,7 +13,6 @@ steps:
     runnable: PromptTemplate
     config:
       template: "Extract keywords from the following text: {text_content}"
-      input_variables: ["text_content"]
     dataset: true
 
   - name: llm_processor

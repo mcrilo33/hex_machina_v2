@@ -1,0 +1,3 @@
+name: "content_analysis"
+description: "Analyze the content and provide insights"
+template: "Analyze the following content and provide key insights: {text_content}"
