@@ -7,12 +7,10 @@ with the RunnableRegistry for runnable discovery.
 """
 
 import logging
-import os
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Union
 
 from langchain_core.runnables import Runnable, RunnableSequence
-from langchain_core.runnables.configurable import ConfigurableField
 from pydantic import BaseModel, Field
 
 from .datasets import StepDataset, StepDatasetManager
@@ -61,7 +59,7 @@ class TaskConfig(BaseModel):
 
 class TaskStrategy(ABC):
     """Abstract base class for different task building strategies."""
-    
+
     @abstractmethod
     def build_task(self, config: TaskConfig, runnables: List[Runnable]) -> Runnable:
         """Build a task using the specific strategy."""
@@ -70,7 +68,7 @@ class TaskStrategy(ABC):
 
 class StandardTaskStrategy(TaskStrategy):
     """Standard sequential task building strategy."""
-    
+
     def build_task(self, config: TaskConfig, runnables: List[Runnable]) -> Runnable:
         """Build a standard sequential task."""
         if len(runnables) == 1:
@@ -80,27 +78,27 @@ class StandardTaskStrategy(TaskStrategy):
 
 class ArticleFetcherTaskStrategy(TaskStrategy):
     """Strategy for ArticleFetcher + enrichment steps + batch save tasks."""
-    
+
     def build_task(self, config: TaskConfig, runnables: List[Runnable]) -> Runnable:
         """Build an ArticleFetcher task with map-reduce pattern."""
         from langchain_core.runnables import RunnableLambda
-        
+
         # First step: ArticleFetcher
         article_fetcher = runnables[0]
-        
+
         # Middle steps: enrichment processors
         enrichment_steps = runnables[1:-1]
         enrichment_step_names = [step.name for step in config.steps[1:-1]]
-        
+
         # Last step: EnrichmentSaver
         enrichment_saver = runnables[-1]
-        
+
         # Map phase: process each article through enrichment steps
         def process_article_through_enrichment_steps(article):
             """Process a single article through enrichment steps."""
             current_input = article
             result = {}
-            
+
             for runnable, step_name in zip(enrichment_steps, enrichment_step_names):
                 try:
                     step_result = runnable.invoke(current_input)
@@ -108,16 +106,16 @@ class ArticleFetcherTaskStrategy(TaskStrategy):
                     current_input = step_result
                 except Exception as e:
                     result[step_name] = {"error": str(e)}
-            
+
             result["article"] = article
             return result
-        
+
         # Reduce phase: batch save all enrichments
         def save_all_enrichments_in_batch(enriched_articles):
             """Save all enrichments in batch."""
             if not enriched_articles:
                 return {"saved_count": 0, "enriched_articles": []}
-            
+
             try:
                 # Prepare enrichments for batch saving
                 enrichments_to_save = []
@@ -126,56 +124,66 @@ class ArticleFetcherTaskStrategy(TaskStrategy):
                     article_id = enriched_article.get("article", {}).get("id")
                     if not article_id:
                         continue
-                    
+
                     # Extract content from the last enrichment step
                     last_step_name = enrichment_step_names[-1]
                     if last_step_name in enriched_article:
                         content = enriched_article[last_step_name]
-                        
+
                         # Convert content to string if it's a message object
-                        if hasattr(content, 'text'):
+                        if hasattr(content, "text"):
                             content = content.text
-                        elif hasattr(content, 'content'):
+                        elif hasattr(content, "content"):
                             content = content.content
-                        
+
                         # Create enrichment data
                         enrichment_data = {
                             "article_id": article_id,
                             "content": content,
-                            "enrichment_type": config.steps[-1].config.get("enrichment_type", "keywords"),
-                            "db_path": config.steps[-1].config.get("db_path", "storage/articles14.db")
+                            "enrichment_type": config.steps[-1].config.get(
+                                "enrichment_type", "keywords"
+                            ),
+                            "db_path": config.steps[-1].config.get(
+                                "db_path", "storage/articles14.db"
+                            ),
                         }
                         enrichments_to_save.append(enrichment_data)
-                
+
                 # Save all enrichments in batch
                 if enrichments_to_save:
-                    batch_result = enrichment_saver.invoke({"enrichments": enrichments_to_save})
+                    batch_result = enrichment_saver.invoke(
+                        {"enrichments": enrichments_to_save}
+                    )
                     return batch_result
                 else:
                     return {"saved_count": 0, "enriched_articles": enriched_articles}
-                
+
             except Exception as e:
-                return {"error": f"Batch save failed: {e}", "saved_count": 0, "enriched_articles": enriched_articles}
-        
+                return {
+                    "error": f"Batch save failed: {e}",
+                    "saved_count": 0,
+                    "enriched_articles": enriched_articles,
+                }
+
         # Create the map-reduce pipeline
         enrichment_processor = RunnableLambda(process_article_through_enrichment_steps)
         batch_saver = RunnableLambda(save_all_enrichments_in_batch)
-        
+
         # Chain: ArticleFetcher -> Map(Enrichment) -> Reduce(Batch Save)
         return article_fetcher | enrichment_processor.map() | batch_saver
-    
-
 
 
 class TaskStrategyFactory:
     """Factory for creating appropriate task building strategies."""
-    
+
     def create_strategy(self, config: TaskConfig) -> TaskStrategy:
         """Create the appropriate strategy based on task configuration."""
-        if (config.steps and 
-            config.steps[0].runnable == "ArticleFetcher" and 
-            len(config.steps) > 1 and
-            config.steps[-1].runnable == "EnrichmentSaver"):
+        if (
+            config.steps
+            and config.steps[0].runnable == "ArticleFetcher"
+            and len(config.steps) > 1
+            and config.steps[-1].runnable == "EnrichmentSaver"
+        ):
             return ArticleFetcherTaskStrategy()
         return StandardTaskStrategy()
 
@@ -235,14 +243,16 @@ class TaskBuilder(Runnable):
         try:
             # Build individual step runnables
             runnables = self._build_step_runnables(config)
-            
+
             # Create appropriate strategy and build task
             strategy = self.strategy_factory.create_strategy(config)
             task = strategy.build_task(config, runnables)
-            
-            self._logger.info(f"Successfully built task '{config.name}' with {len(config.steps)} steps")
+
+            self._logger.info(
+                f"Successfully built task '{config.name}' with {len(config.steps)} steps"
+            )
             return task
-            
+
         except Exception as e:
             self._logger.error(f"Failed to build task '{config.name}': {e}")
             raise RuntimeError(f"Task building failed: {e}")
@@ -250,22 +260,22 @@ class TaskBuilder(Runnable):
     def _build_step_runnables(self, config: TaskConfig) -> List[Runnable]:
         """Build runnables for each step in the task."""
         runnables = []
-        
+
         for step_config in config.steps:
             self._logger.debug(f"Building step: {step_config.name}")
-            
+
             # Get the runnable from registry
             runnable = self._build_step_runnable(step_config)
-            
+
             # Add step-specific metadata
             runnable = self._add_step_metadata(runnable, step_config, config)
-            
+
             # Apply input/output transformations if specified
             if step_config.inputs or step_config.outputs:
                 runnable = self._apply_step_transformations(runnable, step_config)
-            
+
             runnables.append(runnable)
-        
+
         return runnables
 
     def _build_step_runnable(self, step_config: StepConfig) -> Runnable:
@@ -274,16 +284,18 @@ class TaskBuilder(Runnable):
             # Use the registry's invoke method with proper input format
             input_data = {
                 "runnable_name": step_config.runnable,
-                "config": step_config.config or {}
+                "config": step_config.config or {},
             }
             runnable = self.registry.invoke(input_data)
-            
+
             return runnable
-            
+
         except Exception as e:
             raise ValueError(f"Failed to build step '{step_config.name}': {e}")
 
-    def _add_step_metadata(self, runnable: Runnable, step_config: StepConfig, task_config: TaskConfig) -> Runnable:
+    def _add_step_metadata(
+        self, runnable: Runnable, step_config: StepConfig, task_config: TaskConfig
+    ) -> Runnable:
         """Add metadata to a runnable."""
         metadata = {
             "step_name": step_config.name,
@@ -295,10 +307,12 @@ class TaskBuilder(Runnable):
             "task_type": task_config.metadata.get("task_type", "unknown"),
             "version": task_config.metadata.get("version", "1.0"),
         }
-        
+
         return runnable.with_config({"metadata": metadata})
 
-    def _apply_step_transformations(self, runnable: Runnable, step_config: StepConfig) -> Runnable:
+    def _apply_step_transformations(
+        self, runnable: Runnable, step_config: StepConfig
+    ) -> Runnable:
         """Apply input/output transformations to a runnable."""
         # This can be extended for more complex transformations
         return runnable
@@ -366,18 +380,27 @@ class TaskBuilder(Runnable):
             self._logger.error(f"Tracing execution failed: {e}")
             return task.invoke(inputs), None
 
-    def _wait_for_traces_and_generate_datasets(self, config: TaskConfig, run_tree: Any) -> None:
+    def _wait_for_traces_and_generate_datasets(
+        self, config: TaskConfig, run_tree: Any
+    ) -> None:
         """Wait for traces to be populated and generate datasets."""
         try:
             # Wait for traces to be fully populated
-            self._logger.info("⏳ Waiting for traces to be fully populated in LangSmith...")
+            self._logger.info(
+                "⏳ Waiting for traces to be fully populated in LangSmith..."
+            )
             run_tree.wait()
-            self._logger.info("✅ Traces are now fully populated, generating datasets...")
+            self._logger.info(
+                "✅ Traces are now fully populated, generating datasets..."
+            )
 
             # Additional delay to ensure all traces are written
             import time
+
             time.sleep(5)
-            self._logger.info("✅ Additional delay completed, proceeding with dataset generation...")
+            self._logger.info(
+                "✅ Additional delay completed, proceeding with dataset generation..."
+            )
 
             # Generate datasets from traces
             self._generate_datasets_from_traces(config, run_tree)
@@ -389,12 +412,15 @@ class TaskBuilder(Runnable):
         """Generate datasets by querying LangSmith traces."""
         try:
             from langsmith import Client
+
             client = Client()
 
             # Find the RunnableEach trace_id for step-level datasets
             runnable_each_trace_id = self._find_runnable_each_trace_id(run_tree)
             if not runnable_each_trace_id:
-                self._logger.warning("No RunnableEach trace_id found, skipping step dataset generation.")
+                self._logger.warning(
+                    "No RunnableEach trace_id found, skipping step dataset generation."
+                )
                 return
 
             # Process each step that has dataset=True
@@ -403,7 +429,9 @@ class TaskBuilder(Runnable):
                     continue
 
                 self._logger.info(f"🔍 Processing step: {step_config.name}")
-                self._create_step_dataset_from_traces(config, step_config, runnable_each_trace_id, client)
+                self._create_step_dataset_from_traces(
+                    config, step_config, runnable_each_trace_id, client
+                )
 
         except Exception as e:
             self._logger.error(f"Error generating datasets from traces: {e}")
@@ -417,10 +445,14 @@ class TaskBuilder(Runnable):
         for child in run_tree.child_runs:
             if hasattr(child, "child_runs"):
                 for grandchild in child.child_runs:
-                    if hasattr(grandchild, "name") and "RunnableEach" in str(grandchild.name):
+                    if hasattr(grandchild, "name") and "RunnableEach" in str(
+                        grandchild.name
+                    ):
                         trace_id = getattr(grandchild, "trace_id", None)
                         if trace_id:
-                            self._logger.info(f"✅ Found RunnableEach trace_id: {trace_id}")
+                            self._logger.info(
+                                f"✅ Found RunnableEach trace_id: {trace_id}"
+                            )
                             return trace_id
 
         return None
@@ -431,34 +463,23 @@ class TaskBuilder(Runnable):
         """Create a step dataset from LangSmith traces."""
         try:
             # Query LangSmith for runs in this trace
-            all_runs_in_trace = list(
+            matching_runs = list(
                 client.list_runs(
                     trace=trace_id,
                     select=["name", "inputs", "outputs", "run_type", "extra"],
+                    filter=f"and(eq(metadata_key, 'step_name'), eq(metadata_value, '{step_config.name}'))",
                 )
             )
 
-            # Find runs that match this step's metadata
-            matching_runs = []
-            self._logger.info(f"🔍 Checking {len(all_runs_in_trace)} runs for step '{step_config.name}'")
-            
-            for run in all_runs_in_trace:
-                self._logger.debug(f"Run: {run.name}, Extra: {getattr(run, 'extra', 'None')}")
-                
-                if hasattr(run, "extra") and run.extra:
-                    step_name = run.extra.get("step_name")
-                    task_name = run.extra.get("task_name")
-                    self._logger.debug(f"  step_name: {step_name}, task_name: {task_name}")
-                    
-                    if step_name == step_config.name and task_name == config.name:
-                        matching_runs.append(run)
-                        self._logger.debug(f"  ✅ Match found!")
-
             if not matching_runs:
-                self._logger.warning(f"⚠️ No matching runs found for step '{step_config.name}', skipping dataset creation.")
+                self._logger.warning(
+                    f"⚠️ No matching runs found for step '{step_config.name}', skipping dataset creation."
+                )
                 return
 
-            self._logger.info(f"✅ Found {len(matching_runs)} runs for step '{step_config.name}'")
+            self._logger.info(
+                f"✅ Found {len(matching_runs)} runs for step '{step_config.name}'"
+            )
 
             # Create step dataset
             step_dataset_config = StepDataset(
@@ -484,10 +505,14 @@ class TaskBuilder(Runnable):
                         task_name=config.name,
                     )
 
-                self._logger.info(f"✅ Step dataset '{step_config.name}' created with {len(matching_runs)} examples")
+                self._logger.info(
+                    f"✅ Step dataset '{step_config.name}' created with {len(matching_runs)} examples"
+                )
 
         except Exception as e:
-            self._logger.error(f"Error creating dataset for step '{step_config.name}': {e}")
+            self._logger.error(
+                f"Error creating dataset for step '{step_config.name}': {e}"
+            )
 
     async def ainvoke(self, config: Union[TaskConfig, Dict[str, Any]]) -> Runnable:
         """Async version of invoke."""
