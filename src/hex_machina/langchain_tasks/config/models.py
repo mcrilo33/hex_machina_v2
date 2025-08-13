@@ -97,6 +97,14 @@ class ExperimentConfig(BaseModel):
     metadata: Optional[Dict[str, Any]] = Field(
         default_factory=dict, description="Additional experiment metadata"
     )
+    settings: Optional[Dict[str, Any]] = Field(
+        default_factory=lambda: {
+            "experiment_prefix": "experiment",
+            "save_results": True,
+            "metadata": {},
+        },
+        description="Experiment settings",
+    )
 
     def generate_task_variations(self) -> List[TaskConfig]:
         """Generate all possible task variations from multiple values."""
@@ -154,3 +162,44 @@ class ExperimentConfig(BaseModel):
 
         print(f"🔍 DEBUG: Generated {len(variations)} variations")
         return variations
+
+    def get_evaluation_config(self, step_name: Optional[str] = None) -> List[Any]:
+        """Get evaluation configuration for a specific step or task level."""
+        if step_name:
+            # Step-level evaluation
+            step_evaluations = self.evaluations.get("steps", {}).get(step_name, {})
+            if isinstance(step_evaluations, dict) and "evaluators" in step_evaluations:
+                step_evaluations = step_evaluations["evaluators"]
+            else:
+                step_evaluations = []
+        else:
+            # Task-level evaluation
+            task_evaluations = self.evaluations.get("task", {})
+            if isinstance(task_evaluations, dict) and "evaluators" in task_evaluations:
+                step_evaluations = task_evaluations["evaluators"]
+            else:
+                step_evaluations = []
+
+        return step_evaluations
+
+    def get_target_datasets_for_step(self, step_name: str) -> List[str]:
+        """Get target datasets for a specific step."""
+        step_evaluations = self.evaluations.get("steps", {}).get(step_name, [])
+        if isinstance(step_evaluations, dict):
+            return step_evaluations.get("target_datasets", [])
+        elif isinstance(step_evaluations, list):
+            # If it's a list of evaluators, look for target_datasets in the first one
+            if step_evaluations and isinstance(step_evaluations[0], dict):
+                return step_evaluations[0].get("target_datasets", [])
+        return []
+
+    def get_target_datasets_for_task(self) -> List[str]:
+        """Get target datasets for task-level evaluation."""
+        task_evaluations = self.evaluations.get("task", [])
+        if isinstance(task_evaluations, dict):
+            return task_evaluations.get("target_datasets", [])
+        elif isinstance(task_evaluations, list):
+            # If it's a list of evaluators, look for target_datasets in the first one
+            if task_evaluations and isinstance(task_evaluations[0], dict):
+                return task_evaluations[0].get("target_datasets", [])
+        return []

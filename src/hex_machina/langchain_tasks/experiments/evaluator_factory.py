@@ -66,6 +66,8 @@ class EvaluatorFactory:
             return self._create_conciseness_scorer(config.parameters or {})
         elif evaluator_type == "relevance":
             return self._create_relevance_scorer(config.parameters or {})
+        elif evaluator_type == "criteria":
+            return self._create_criteria_evaluator(config)
         else:
             raise ValueError(f"Unknown evaluator type: {evaluator_type}")
 
@@ -179,6 +181,59 @@ class EvaluatorFactory:
                 }
 
         return conciseness_evaluator
+
+    def _create_criteria_evaluator(self, config: EvaluatorConfig) -> Callable:
+        """Create a criteria-based evaluator."""
+        criteria_list = (
+            config.parameters.get("criteria", []) if config.parameters else []
+        )
+        threshold = (
+            config.parameters.get("threshold", 0.8) if config.parameters else 0.8
+        )
+
+        def criteria_evaluator(run, example):
+            """Evaluate based on specified criteria."""
+            output = run.outputs.get("result", "")
+
+            # Simple criteria evaluation (placeholder implementation)
+            # In practice, this would use more sophisticated evaluation logic
+            scores = {}
+            total_score = 0.0
+
+            for criterion in criteria_list:
+                if criterion == "accuracy":
+                    # Placeholder accuracy scoring
+                    score = 0.8  # This would be calculated based on actual evaluation
+                elif criterion == "completeness":
+                    # Placeholder completeness scoring
+                    score = 0.7  # This would be calculated based on actual evaluation
+                elif criterion == "relevance":
+                    # Placeholder relevance scoring
+                    score = 0.9  # This would be calculated based on actual evaluation
+                else:
+                    # Default score for unknown criteria
+                    score = 0.5
+
+                scores[criterion] = score
+                total_score += score
+
+            # Calculate average score
+            avg_score = total_score / len(criteria_list) if criteria_list else 0.5
+
+            # Determine if threshold is met
+            threshold_met = avg_score >= threshold
+
+            return {
+                "score": avg_score,
+                "threshold_met": threshold_met,
+                "threshold": threshold,
+                "criteria_scores": scores,
+                "reasoning": f"Evaluated {len(criteria_list)} criteria: {criteria_list}. Average score: {avg_score:.2f}, Threshold: {threshold:.2f}",
+                "criterion": "criteria_evaluation",
+                "evaluator_name": config.name,
+            }
+
+        return criteria_evaluator
 
     def _create_relevance_scorer(self, params: Dict[str, Any]) -> Callable:
         """Create a relevance scorer based on parameters."""

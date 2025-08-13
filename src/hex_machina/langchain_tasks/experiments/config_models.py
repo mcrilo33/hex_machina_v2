@@ -188,22 +188,50 @@ class ExperimentConfiguration(BaseModel):
 
     def get_target_datasets_for_step(self, step_name: str) -> List[str]:
         """Get target datasets for a specific step."""
+        import logging
+
+        logger = logging.getLogger("langchain_tasks.experiments.config_models")
+
         step_evaluations = self.evaluations.get("steps", {}).get(step_name, [])
+        logger.info(
+            f"🔍 Getting target datasets for step '{step_name}': {step_evaluations}"
+        )
+
         if isinstance(step_evaluations, dict):
-            return step_evaluations.get("target_datasets", [])
+            target_datasets = step_evaluations.get("target_datasets", [])
+            logger.info(
+                f"📊 Step '{step_name}' target datasets (dict): {target_datasets}"
+            )
+            return target_datasets
         elif isinstance(step_evaluations, list):
             # If it's a list of evaluators, look for target_datasets in the first one
             if step_evaluations and isinstance(step_evaluations[0], dict):
-                return step_evaluations[0].get("target_datasets", [])
+                target_datasets = step_evaluations[0].get("target_datasets", [])
+                logger.info(
+                    f"📊 Step '{step_name}' target datasets (list): {target_datasets}"
+                )
+                return target_datasets
+        logger.info(f"📊 Step '{step_name}' no target datasets found")
         return []
 
     def get_target_datasets_for_task(self) -> List[str]:
         """Get target datasets for task-level evaluation."""
+        import logging
+
+        logger = logging.getLogger("langchain_tasks.experiments.config_models")
+
         task_evaluations = self.evaluations.get("task", [])
+        logger.info(f"🔍 Getting task-level target datasets: {task_evaluations}")
+
         if isinstance(task_evaluations, dict):
-            return task_evaluations.get("target_datasets", [])
+            target_datasets = task_evaluations.get("target_datasets", [])
+            logger.info(f"📊 Task-level target datasets (dict): {target_datasets}")
+            return target_datasets
         elif isinstance(task_evaluations, list):
             # If it's a list of evaluators, look for target_datasets in the first one
             if task_evaluations and isinstance(task_evaluations[0], dict):
-                return task_evaluations[0].get("target_datasets", [])
+                target_datasets = task_evaluations[0].get("target_datasets", [])
+                logger.info(f"📊 Task-level target datasets (list): {target_datasets}")
+                return target_datasets
+        logger.info("📊 Task-level no target datasets found")
         return []

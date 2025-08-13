@@ -92,11 +92,17 @@ class YAMLExperimentRunner:
         # Add step-level datasets
         for step in task_variation.steps:
             step_datasets = config.get_target_datasets_for_step(step.name)
+            self._logger.info(f"Step '{step.name}' target datasets: {step_datasets}")
             all_datasets.update(step_datasets)
 
         # Add task-level datasets
         task_datasets = config.get_target_datasets_for_task()
+        self._logger.info(f"Task-level target datasets: {task_datasets}")
         all_datasets.update(task_datasets)
+
+        self._logger.info(
+            f"All target datasets for variation {variation_index}: {all_datasets}"
+        )
 
         if not all_datasets:
             self._logger.warning("No target datasets found in evaluation configuration")
@@ -104,7 +110,7 @@ class YAMLExperimentRunner:
 
         # Run evaluation on each dataset
         for dataset_name in all_datasets:
-            self._logger.info(f"Evaluating dataset: {dataset_name}")
+            self._logger.info(f"🔍 Starting evaluation for dataset: {dataset_name}")
 
             try:
                 dataset_result = await self._evaluate_dataset_for_variation(
@@ -116,9 +122,13 @@ class YAMLExperimentRunner:
 
                 if dataset_result["success"]:
                     variation_results["successful_runs"] += 1
+                    self._logger.info(
+                        f"✅ Dataset evaluation successful: {dataset_name}"
+                    )
                 else:
                     variation_results["failed_runs"] += 1
                     variation_results["errors"].extend(dataset_result.get("errors", []))
+                    self._logger.error(f"❌ Dataset evaluation failed: {dataset_name}")
 
             except Exception as e:
                 error_msg = f"Failed to evaluate dataset {dataset_name}: {e}"
@@ -146,27 +156,58 @@ class YAMLExperimentRunner:
     ) -> Dict[str, Any]:
         """Evaluate a dataset for a specific task variation."""
         try:
+            self._logger.info(
+                f"🔍 Evaluating dataset '{dataset_name}' for variation {variation_index}"
+            )
+
             # Determine which step this dataset corresponds to
             step_name = self._extract_step_name_from_dataset(
                 dataset_name, task_variation
+            )
+            self._logger.info(
+                f"📋 Extracted step name from dataset '{dataset_name}': {step_name}"
             )
 
             # Get evaluation configuration for this step
             evaluators = []
             if step_name:
                 # Step-level evaluation
+                self._logger.info(
+                    f"🔧 Getting step-level evaluations for step: {step_name}"
+                )
                 step_evaluations = config.get_evaluation_config(step_name)
+                self._logger.info(f"📊 Step evaluations found: {len(step_evaluations)}")
                 for eval_config in step_evaluations:
+                    self._logger.info(
+                        f"🔧 Creating evaluator: {eval_config.get('name', 'unnamed')} (type: {eval_config.get('type', 'unknown')})"
+                    )
+                    # Convert dict to EvaluatorConfig if needed
+                    if isinstance(eval_config, dict):
+                        from .config_models import EvaluatorConfig
+
+                        eval_config = EvaluatorConfig(**eval_config)
                     evaluator_func = evaluator_factory.create_evaluator(eval_config)
                     evaluators.append(evaluator_func)
 
             # Also add task-level evaluations if available
+            self._logger.info("🔧 Getting task-level evaluations")
             task_evaluations = (
                 config.get_evaluation_config()
             )  # No step_name = task level
+            self._logger.info(f"📊 Task evaluations found: {len(task_evaluations)}")
             for eval_config in task_evaluations:
+                self._logger.info(
+                    f"🔧 Creating evaluator: {eval_config.get('name', 'unnamed')} (type: {eval_config.get('type', 'unknown')})"
+                )
+                # Convert dict to EvaluatorConfig if needed
+                if isinstance(eval_config, dict):
+                    from .config_models import EvaluatorConfig
+
+                    eval_config = EvaluatorConfig(**eval_config)
                 evaluator_func = evaluator_factory.create_evaluator(eval_config)
                 evaluators.append(evaluator_func)
+
+            self._logger.info(f"📊 Total evaluators created: {len(evaluators)}")
 
             if not evaluators:
                 self._logger.warning(f"No evaluators found for dataset: {dataset_name}")
@@ -177,34 +218,42 @@ class YAMLExperimentRunner:
                 }
 
             # Create experiment prefix
-            experiment_prefix = f"{config.settings.experiment_prefix}_variation_{variation_index}_{dataset_name}"
+            experiment_prefix = f"{config.settings.get('experiment_prefix', 'experiment')}_variation_{variation_index}_{dataset_name}"
+            self._logger.info(f"🏷️  Experiment prefix: {experiment_prefix}")
 
             # Run evaluation using LangSmith's aevaluate
             self._logger.info(
-                f"Running evaluation with {len(evaluators)} evaluators on {dataset_name} for variation {variation_index}"
+                f"🚀 Running evaluation with {len(evaluators)} evaluators on {dataset_name} for variation {variation_index}"
             )
+
+            # Prepare metadata safely
+            base_metadata = {
+                "experiment_name": config.name,
+                "variation_index": variation_index,
+                "variation_name": task_variation.name,
+                "dataset_name": dataset_name,
+                "evaluation_type": "task_variation_evaluation",
+                "evaluator_count": len(evaluators),
+                "step_name": step_name,
+                "variation_config": {
+                    step.name: step.config
+                    for step in task_variation.steps
+                    if step.config
+                },
+            }
+
+            # Add settings metadata if available
+            if hasattr(config, "settings") and config.settings:
+                if isinstance(config.settings, dict) and "metadata" in config.settings:
+                    base_metadata.update(config.settings["metadata"])
 
             results = await aevaluate(
                 RunnableLambda(lambda x: x),  # Identity function for dataset evaluation
                 dataset_name,  # Dataset name
                 evaluators=evaluators,
                 experiment_prefix=experiment_prefix,
-                description=f"Variation {variation_index}: {task_variation.description} on {dataset_name}",
-                metadata={
-                    "experiment_name": config.name,
-                    "variation_index": variation_index,
-                    "variation_name": task_variation.name,
-                    "dataset_name": dataset_name,
-                    "evaluation_type": "task_variation_evaluation",
-                    "evaluator_count": len(evaluators),
-                    "step_name": step_name,
-                    "variation_config": {
-                        step.name: step.config
-                        for step in task_variation.steps
-                        if step.config
-                    },
-                    **config.settings.metadata,
-                },
+                description=f"Variation {variation_index}: {task_variation.description or 'No description'} on {dataset_name}",
+                metadata=base_metadata,
             )
 
             # Extract results information

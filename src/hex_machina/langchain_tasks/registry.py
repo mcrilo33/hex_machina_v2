@@ -20,6 +20,10 @@ class RegistryConfig(BaseModel):
     auto_discover_builtins: bool = Field(
         default=True, description="Automatically discover common LangChain runnables"
     )
+    auto_discover_custom: bool = Field(
+        default=True,
+        description="Automatically discover custom runnables from runnables module",
+    )
     builtin_modules: list[str] = Field(
         default=[
             "langchain_openai",
@@ -45,6 +49,7 @@ class RunnableRegistry(Runnable):
     Features:
     - Class registration for custom runnables
     - Auto-discovery of LangChain built-in runnables
+    - Auto-discovery of custom runnables from runnables module
     - LCEL compatibility (implements Runnable interface)
     """
 
@@ -64,6 +69,10 @@ class RunnableRegistry(Runnable):
         # Auto-discover built-ins if enabled
         if self.config.auto_discover_builtins:
             self._auto_discover_builtins()
+
+        # Auto-discover custom runnables if enabled
+        if self.config.auto_discover_custom:
+            self._auto_discover_custom_runnables()
 
         # Register custom runnables from config
         self._register_custom_runnables()
@@ -104,20 +113,48 @@ class RunnableRegistry(Runnable):
                     ):
                         self._builtin_registry[class_name] = runnable_class
                         self._logger.debug(
-                            f"Discovered built-in runnable: {class_name}"
+                            f"Discovered built-in runnable: {class_name} from {module_path}"
                         )
             except ImportError:
-                self._logger.debug(
-                    f"Module {module_path} not available, skipping {class_name}"
-                )
+                # Module not available, skip
+                pass
             except Exception as e:
-                self._logger.warning(
-                    f"Failed to discover {class_name} from {module_path}: {e}"
-                )
+                self._logger.debug(f"Failed to discover {class_name}: {e}")
 
-        self._logger.info(
-            f"Auto-discovered {len(self._builtin_registry)} built-in runnables"
-        )
+    def _auto_discover_custom_runnables(self) -> None:
+        """Auto-discover custom runnables from the runnables module."""
+        self._logger.info("Auto-discovering custom runnables...")
+
+        try:
+            # Import the runnables module to trigger registration
+            from . import runnables
+
+            # Get the runnable registry from the runnables module
+            if hasattr(runnables, "runnable_registry"):
+                custom_registry = runnables.runnable_registry
+
+                # Get all registered runnables
+                for name in custom_registry.list_available():
+                    try:
+                        runnable_class = custom_registry.get(name)
+                        if isinstance(runnable_class, type) and issubclass(
+                            runnable_class, Runnable
+                        ):
+                            self._custom_registry[name] = runnable_class
+                            self._logger.debug(f"Discovered custom runnable: {name}")
+                        else:
+                            self._logger.warning(
+                                f"Invalid custom runnable class: {name} -> {type(runnable_class)}"
+                            )
+                    except Exception as e:
+                        self._logger.warning(
+                            f"Failed to load custom runnable {name}: {e}"
+                        )
+
+        except ImportError as e:
+            self._logger.debug(f"Could not import runnables module: {e}")
+        except Exception as e:
+            self._logger.debug(f"Failed to auto-discover custom runnables: {e}")
 
     def _register_custom_runnables(self) -> None:
         """Register custom runnables from configuration."""

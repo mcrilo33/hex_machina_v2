@@ -1,40 +1,34 @@
 """
-LangChain Tasks - A modular system for building, executing, and evaluating LangChain applications.
+LangChain Tasks - A framework for building and running LangChain-based tasks.
 
-This package provides:
-- Task building from YAML configuration
-- Runnable registry for custom and built-in components
-- Dataset generation and management
-- Evaluation system using LangSmith
-- Experiment execution with multiple variations
+This package provides a simple way to define, configure, and execute
+LangChain tasks and experiments from YAML configuration files.
 """
 
 from .builder import TaskBuilder
-from .config import EvaluationConfig, ExperimentConfig, StepConfig, TaskConfig
-from .datasets import DatasetGenerator, StepDataset, StepDatasetManager
-from .evaluation import EvaluationRunner, EvaluatorRegistry, evaluator_registry
-from .experiments import ExperimentRunner
+from .cli import main
+from .config.models import (
+    EvaluationConfig,
+    ExperimentConfig,
+    StepConfig,
+    TaskConfig,
+)
+from .datasets import StepDatasetManager
+from .evaluation.registry import EvaluatorRegistry
+from .experiments import YAMLExperimentRunner
 from .registry import RunnableRegistry
 
 __version__ = "0.1.0"
 
 __all__ = [
-    # Core components
     "TaskBuilder",
-    "RunnableRegistry",
-    # Configuration models
-    "TaskConfig",
-    "StepConfig",
-    "ExperimentConfig",
+    "main",
     "EvaluationConfig",
-    # Dataset management
-    "DatasetGenerator",
-    "StepDataset",
+    "ExperimentConfig",
+    "StepConfig",
+    "TaskConfig",
     "StepDatasetManager",
-    # Evaluation system
-    "EvaluationRunner",
     "EvaluatorRegistry",
-    "evaluator_registry",
-    # Experiment system
-    "ExperimentRunner",
+    "YAMLExperimentRunner",
+    "RunnableRegistry",
 ]

@@ -1,0 +1,26 @@
+name: example_experiment
+description: "Example experiment configuration for CLI demonstration"
+task:
+  name: ExampleTask
+  steps:
+    - name: mock_processor
+      runnable: MockKeywordExtractor
+      config:
+        max_keywords: [3, 5, 7]
+      dataset: true
+
+evaluations:
+  mock_processor:
+    - name: criteria_completeness
+      type: "criteria"
+      parameters:
+        criteria: ["completeness", "accuracy"]
+        threshold: 0.8
+
+metadata:
+  category: "example"
+  tags:
+    - "demo"
+    - "cli-test"
+  author: "Hex Machina v2"
+  created_date: "2025-01-27"

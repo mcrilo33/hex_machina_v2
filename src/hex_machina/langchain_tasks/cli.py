@@ -14,8 +14,17 @@ from typing import Optional
 
 import yaml
 
+# Load environment variables from .env files
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:
+    # dotenv not available, continue without it
+    pass
+
 from .builder import TaskBuilder
-from .experiments.runner import ExperimentRunner
+from .experiments.yaml_runner import YAMLExperimentRunner
 from .registry import RunnableRegistry
 
 
@@ -119,7 +128,7 @@ def run_task(config_path: Path, article_id: Optional[int] = None) -> None:
 
 
 def run_experiment(config_path: Path, input_file: Optional[Path] = None) -> None:
-    """Run an experiment with multiple task variations.
+    """Run an experiment from YAML configuration.
 
     Args:
         config_path: Path to experiment YAML config
@@ -138,6 +147,13 @@ def run_experiment(config_path: Path, input_file: Optional[Path] = None) -> None
             f"Loaded experiment configuration: {config_dict.get('name', 'unnamed')}"
         )
 
+        # Initialize components - Registry will auto-discover custom runnables
+        registry = RunnableRegistry()
+        task_builder = TaskBuilder(registry=registry)
+
+        # Always use YAMLExperimentRunner for experiments
+        experiment_runner = YAMLExperimentRunner()
+
         # Load test inputs if provided
         inputs = {}
         if input_file:
@@ -152,14 +168,17 @@ def run_experiment(config_path: Path, input_file: Optional[Path] = None) -> None
                 inputs = json.load(f)
             logger.info(f"Loaded test inputs from: {input_file}")
 
-        # Initialize components - Registry will auto-discover custom runnables
-        registry = RunnableRegistry()
-        task_builder = TaskBuilder(registry=registry)
-        experiment_runner = ExperimentRunner(task_builder=task_builder)
+        # Instantiate the proper configuration model
+        from .config.models import ExperimentConfig
+
+        experiment_config = ExperimentConfig(**config_dict)
 
         # Execute experiment
         logger.info("Executing experiment...")
-        result = experiment_runner.run_experiment(config_dict, inputs)
+        # YAMLExperimentRunner is async, use sync wrapper
+        result = experiment_runner.run_sync(
+            experiment_runner.run_experiments_from_config(experiment_config)
+        )
 
         logger.info("Experiment completed successfully")
         logger.info(f"Total variations: {result.get('total_variations', 'unknown')}")

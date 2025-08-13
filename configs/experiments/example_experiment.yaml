@@ -1,0 +1,45 @@
+name: example_experiment
+description: "Example experiment configuration for CLI demonstration"
+
+task:
+  name: "ExampleTask"
+  steps:
+    - name: fetch_articles
+      runnable: ArticleFetcher
+      config:
+        db_path: "storage/articles14.db"
+        filters:
+          limit: 5
+      dataset: false
+
+    - name: prompt_template
+      runnable: PromptTemplate
+      config:
+        template: "Extract keywords from the following text: {text_content}"
+        input_variables: ["text_content"]
+      dataset: false
+
+    - name: llm_processor
+      runnable: ChatOpenAI
+      config:
+        model: "gpt-3.5-turbo"
+        temperature: 0.0
+        max_tokens: 4000
+      dataset: false
+
+evaluations:
+  steps:
+    llm_processor:
+      evaluators:
+        - name: criteria_accuracy
+          type: "criteria"
+          description: "Evaluate if the LLM output is accurate"
+          parameters:
+            criteria: ["accuracy"]
+            threshold: 0.8
+      target_datasets: ["ExampleTask_llm_processor_20250813_200639"]
+
+metadata:
+  category: "example"
+  tags:
+    - "example_experiment"
