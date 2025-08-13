@@ -409,6 +409,71 @@ class TaskBuilder(Runnable):
                                     step_result = runnable.invoke(current_input)
                                     # Store the result with the step name for input_mapping
                                     result[step_name] = step_result
+
+                                    # Record dataset example for this step if dataset is enabled
+                                    if config.steps[i].dataset and self.dataset_manager:
+                                        try:
+                                            # Create step dataset
+                                            step_dataset_config = StepDataset(
+                                                enabled=True
+                                            )
+                                            dataset = self.dataset_manager.prepare_step_dataset(
+                                                step_name=step_name,
+                                                step_config=step_dataset_config,
+                                            )
+
+                                            if dataset:
+                                                # Record the step execution with article-specific data
+                                                self.dataset_manager.record_step_execution(
+                                                    step_name=step_name,
+                                                    inputs={
+                                                        "step_name": step_name,
+                                                        "runnable": config.steps[
+                                                            i
+                                                        ].runnable,
+                                                        "config": config.steps[i].config
+                                                        or {},
+                                                        "article_id": article.get("id"),
+                                                        "article_title": article.get(
+                                                            "title"
+                                                        ),
+                                                        "article_text": article.get(
+                                                            "text_content", ""
+                                                        )[
+                                                            :500
+                                                        ],  # Truncate for dataset
+                                                    },
+                                                    outputs={
+                                                        "result_type": type(
+                                                            step_result
+                                                        ).__name__,
+                                                        "result_summary": str(
+                                                            step_result
+                                                        )[:200],
+                                                        "step_output": step_result,
+                                                    },
+                                                    additional_metadata={
+                                                        "step_runnable": config.steps[
+                                                            i
+                                                        ].runnable,
+                                                        "article_id": article.get("id"),
+                                                        "data_source": "article_processing",
+                                                        "run_type": "tool",
+                                                        "step_extra": config.steps[
+                                                            i
+                                                        ].config
+                                                        or {},
+                                                    },
+                                                )
+
+                                                self._logger.debug(
+                                                    f"✅ Recorded dataset example for step '{step_name}' and article {article.get('id')}"
+                                                )
+                                        except Exception as e:
+                                            self._logger.warning(
+                                                f"Failed to record dataset for step {step_name}: {e}"
+                                            )
+
                                     # Update current_input for the next step
                                     current_input = step_result
                                 except Exception as e:
@@ -485,7 +550,37 @@ class TaskBuilder(Runnable):
         task = self.invoke(config)
 
         # Execute with tracing using @traceable pattern
-        return self._execute_with_trace(task, config, inputs)
+        result, run_tree = self._execute_with_trace(task, config, inputs)
+
+        # Generate datasets AFTER the trace has finished
+        # This ensures all runs are complete and available in LangSmith
+        if run_tree:
+            # Wait for the run tree to be fully populated in LangSmith
+            self._logger.info(
+                "⏳ Waiting for traces to be fully populated in LangSmith..."
+            )
+            try:
+                run_tree.wait()
+                self._logger.info(
+                    "✅ Traces are now fully populated, generating datasets..."
+                )
+            except Exception as e:
+                self._logger.warning(f"Could not wait for traces: {e}")
+
+            # Add additional delay to ensure all traces are fully written to LangSmith
+            import time
+
+            self._logger.info(
+                "⏳ Additional delay to ensure all traces are fully written..."
+            )
+            time.sleep(3)  # Wait 3 seconds
+            self._logger.info(
+                "✅ Additional delay completed, proceeding with dataset generation..."
+            )
+
+            self._generate_datasets_from_result(config, inputs, result, run_tree)
+
+        return result
 
     def _execute_with_trace(
         self, task: Runnable, config: TaskConfig, inputs: Dict[str, Any]
@@ -532,16 +627,13 @@ class TaskBuilder(Runnable):
                 # Execute the task
                 result = task.invoke(inputs)
 
-                # Generate datasets if enabled
-                if self.dataset_manager:
-                    self._generate_datasets_from_result(
-                        config, inputs, result, run_tree
-                    )
+                # Datasets are now generated outside the trace context
+                pass
 
                 # Log the result
                 run_tree.end(outputs={"result": result})
 
-                return result
+                return result, run_tree
 
         except ImportError:
             # Fallback if langsmith not available
@@ -662,81 +754,234 @@ class TaskBuilder(Runnable):
             # Start dataset tracking for this task execution
             run_id = self.dataset_manager.start_task_execution(config.name)
 
-            # Store the run_tree for later trace gathering
-            if not hasattr(self, "_pending_traces"):
-                self._pending_traces = []
-
-            trace_data = {
-                "config": config,
-                "inputs": inputs,
-                "result": result,
-                "run_tree": run_tree,
-                "run_id": run_id,
-            }
-
-            self._pending_traces.append(trace_data)
-
-            # Generate step-level datasets immediately if enabled
-            self._generate_step_datasets_immediately(config, inputs, result, run_id)
+            # Generate datasets from traces
+            self._generate_datasets_from_traces(config, run_tree, run_id, "step")
 
         except Exception as e:
             self._logger.warning(f"Dataset generation failed: {e}")
 
-    def _generate_step_datasets_immediately(
-        self, config: TaskConfig, inputs: Dict[str, Any], result: Any, run_id: str
+    def _generate_datasets_from_traces(
+        self, config: TaskConfig, run_tree: Any, run_id: str, level: str = "step"
     ) -> None:
-        """Generate step-level datasets immediately after task execution.
+        """Generate datasets by querying LangSmith traces.
 
         Args:
             config: Task configuration
-            inputs: Task inputs
-            result: Task execution result
+            run_tree: LangSmith run tree (for getting trace_id)
             run_id: Current run ID
+            level: "task" for task-level dataset, "step" for step-level datasets
         """
         try:
-            # For each step that has dataset generation enabled
-            for step_config in config.steps:
-                if step_config.dataset:
-                    self._logger.info(
-                        f"Generating dataset for step: {step_config.name}"
+            # Debug: Log what attributes are available on run_tree
+            self._logger.info(f"run_tree type: {type(run_tree)}")
+            self._logger.info(f"run_tree attributes: {dir(run_tree)}")
+
+            # Try different ways to get trace_id based on LangSmith documentation
+            trace_id = None
+
+            # Method 1: Try trace_id attribute
+            if hasattr(run_tree, "trace_id"):
+                trace_id = getattr(run_tree, "trace_id")
+                self._logger.info(f"Found trace_id: {trace_id}")
+
+            # Method 2: Try id attribute (might be the trace_id)
+            elif hasattr(run_tree, "id"):
+                trace_id = getattr(run_tree, "id")
+                self._logger.info(f"Using run_tree.id as trace_id: {trace_id}")
+
+            # Method 3: Try to get from run_tree properties
+            elif hasattr(run_tree, "__dict__"):
+                self._logger.info(
+                    f"run_tree.__dict__ keys: {list(run_tree.__dict__.keys())}"
+                )
+                if "trace_id" in run_tree.__dict__:
+                    trace_id = run_tree.__dict__["trace_id"]
+                    self._logger.info(f"Found trace_id in __dict__: {trace_id}")
+
+            if not trace_id:
+                self._logger.warning("No trace_id found, skipping dataset generation")
+                return
+
+            # Query LangSmith for runs in this trace
+            from langsmith import Client
+
+            client = Client()
+
+            if level == "task":
+                # Task-level: get all runs in the trace using trace_id
+                runs = list(
+                    client.list_runs(
+                        trace_id=trace_id,
+                        select=["name", "inputs", "outputs", "run_type"],
                     )
+                )
+                self._logger.info(f"Found {len(runs)} runs for task-level dataset")
+                # Create single task dataset with all runs
+                self._create_task_dataset(config, runs, run_id)
 
-                    # Create step dataset
-                    step_dataset_config = StepDataset(enabled=True)
-                    dataset = self.dataset_manager.prepare_step_dataset(
-                        step_name=step_config.name, step_config=step_dataset_config
+            else:  # step level
+                # Step-level: create dataset for each step that has dataset=True
+
+                # Get the RunnableEach's trace_id once for all steps
+                if not run_tree.child_runs:
+                    self._logger.warning("No child runs found in run_tree")
+                    return
+
+                runnable_sequence = run_tree.child_runs[0]
+                if len(runnable_sequence.child_runs) < 2:
+                    self._logger.warning(
+                        "RunnableSequence doesn't have enough child runs"
                     )
+                    return
 
-                    if dataset:
-                        # For now, just record the step execution with basic info
-                        # The actual trace grouping will happen later when we have access to LangSmith traces
-                        self.dataset_manager.record_step_execution(
-                            step_name=step_config.name,
-                            inputs={
-                                "step_name": step_config.name,
-                                "runnable": step_config.runnable,
-                                "config": step_config.config or {},
-                                "task_inputs": inputs,
-                            },
-                            outputs={
-                                "result_type": type(result).__name__,
-                                "result_summary": str(result)[:200],
-                            },
-                            additional_metadata={
-                                "step_runnable": step_config.runnable,
-                                "run_id": run_id,
-                                "data_source": "immediate_execution",
-                                "run_type": "tool",
-                                "step_extra": step_config.config or {},
-                            },
-                        )
+                # Find the RunnableEach (child 1) which processes the articles
+                runnable_each = runnable_sequence.child_runs[1]
+                runnable_each_trace_id = getattr(runnable_each, "trace_id", None)
+                if not runnable_each_trace_id:
+                    self._logger.warning("RunnableEach has no trace_id")
+                    return
 
-                        self._logger.info(
-                            f"✅ Step dataset '{step_config.name}' prepared for trace grouping"
-                        )
+                self._logger.info(
+                    f"✅ Found RunnableEach trace_id: {runnable_each_trace_id}"
+                )
+
+                # Process each step that has dataset=True
+                for step_config in config.steps:
+                    if step_config.dataset:
+                        self._logger.info(f"🔍 Processing step: {step_config.name}")
+
+                        # Use the correct LangSmith API call to get all runs for this step
+                        filter_query = f"and(eq(metadata_key, 'step_name'), eq(metadata_value, '{step_config.name}'))"
+                        self._logger.info(f"🔍 Filtering runs with: {filter_query}")
+
+                        try:
+                            step_runs = list(
+                                client.list_runs(
+                                    trace=runnable_each_trace_id,
+                                    filter=filter_query,
+                                )
+                            )
+
+                            self._logger.info(
+                                f"✅ Found {len(step_runs)} runs for step '{step_config.name}'"
+                            )
+
+                            if step_runs:
+                                # Create step dataset first
+                                step_dataset_config = StepDataset(
+                                    enabled=True,
+                                    description=f"Dataset for {step_config.name} step",
+                                )
+                                dataset = (
+                                    self.dataset_manager.generator.create_step_dataset(
+                                        task_name=config.name,
+                                        step_name=step_config.name,
+                                        step_config=step_dataset_config,
+                                        run_id=run_id,
+                                    )
+                                )
+
+                                if dataset:
+                                    # Add each run as an example to the dataset
+                                    for run in step_runs:
+                                        inputs = getattr(run, "inputs", {})
+                                        outputs = getattr(run, "outputs", {})
+
+                                        self.dataset_manager.generator.add_step_example(
+                                            dataset=dataset,
+                                            inputs=inputs,
+                                            outputs=outputs,
+                                            run_id=str(run.id),
+                                            step_name=step_config.name,
+                                            task_name=config.name,
+                                        )
+
+                                    self._logger.info(
+                                        f"✅ Step dataset '{step_config.name}' created with {len(step_runs)} examples"
+                                    )
+                                else:
+                                    self._logger.error(
+                                        f"Failed to create dataset for step '{step_config.name}'"
+                                    )
+                            else:
+                                self._logger.warning(
+                                    f"No runs found for step '{step_config.name}' with metadata filtering"
+                                )
+
+                        except Exception as e:
+                            self._logger.error(
+                                f"Error fetching runs for step '{step_config.name}': {e}"
+                            )
+                            # Continue to next step instead of returning
+                            continue
 
         except Exception as e:
-            self._logger.error(f"Failed to generate step datasets immediately: {e}")
+            self._logger.error(f"Failed to generate datasets from traces: {e}")
+            import traceback
+
+            self._logger.error(f"Traceback: {traceback.format_exc()}")
+
+    def _create_task_dataset(self, config: TaskConfig, runs: list, run_id: str) -> None:
+        """Create a task-level dataset with all runs."""
+        try:
+            dataset = self.dataset_manager.prepare_step_dataset(
+                step_name=config.name, step_config=StepDataset(enabled=True)
+            )
+
+            if dataset:
+                # Record each run as an example
+                for run in runs:
+                    self.dataset_manager.record_step_execution(
+                        step_name=config.name,
+                        inputs=run.inputs or {},
+                        outputs=run.outputs or {},
+                        additional_metadata={
+                            "run_id": run_id,
+                            "trace_run_id": run.id,
+                            "data_source": "trace_execution",
+                            "run_type": run.run_type,
+                        },
+                    )
+
+                self._logger.info(
+                    f"✅ Task dataset '{config.name}' created with {len(runs)} examples"
+                )
+
+        except Exception as e:
+            self._logger.error(f"Failed to create task dataset: {e}")
+
+    def _create_step_dataset(
+        self, step_config: StepConfig, runs: list, run_id: str
+    ) -> None:
+        """Create a step-level dataset."""
+        try:
+            dataset = self.dataset_manager.prepare_step_dataset(
+                step_name=step_config.name, step_config=StepDataset(enabled=True)
+            )
+
+            if dataset:
+                # Record each run as an example
+                for run in runs:
+                    self.dataset_manager.record_step_execution(
+                        step_name=step_config.name,
+                        inputs=run.inputs or {},
+                        outputs=run.outputs or {},
+                        additional_metadata={
+                            "step_runnable": step_config.runnable,
+                            "run_id": run_id,
+                            "trace_run_id": run.id,
+                            "data_source": "trace_execution",
+                            "run_type": run.run_type,
+                            "step_extra": step_config.config or {},
+                        },
+                    )
+
+                self._logger.info(
+                    f"✅ Step dataset '{step_config.name}' created with {len(runs)} examples"
+                )
+
+        except Exception as e:
+            self._logger.error(f"Failed to create step dataset: {e}")
 
     def _extract_step_data_from_result(
         self,
@@ -1131,6 +1376,10 @@ class TaskBuilder(Runnable):
             A RunnableSequence representing the complete task
         """
         return self.invoke(yaml_data)
+
+    def __repr__(self) -> str:
+        """String representation of the task builder."""
+        return f"TaskBuilder(registry={self.registry})"
 
     def __repr__(self) -> str:
         """String representation of the task builder."""
