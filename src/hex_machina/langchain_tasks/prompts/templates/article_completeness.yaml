@@ -1,0 +1,38 @@
+name: "article_completeness"
+description: "Detect if an article is complete based on title and content analysis"
+template: |
+  Analyze the following article to determine if it's complete and identify any completeness issues.
+
+  TITLE: {title}
+  CONTENT: {text_content}
+
+  Evaluate the article for completeness and provide your assessment in the following JSON format:
+
+  {{
+    "is_complete": true/false,
+    "reasons": [
+      // List specific reasons from this predefined set:
+      // - "content_truncated" (if article ends abruptly)
+      // - "missing_sections" (if key sections are missing)
+      // - "malformed_html" (if HTML issues affect content)
+      // - "paywall_content" (if content is subscription-locked)
+      // - "loading_incomplete" (if dynamic content not loaded)
+      // - "ad_spam_content" (if mostly advertisements)
+      // - "error_page" (if server errors or 404)
+      // - "minimal_content" (if too short to be meaningful)
+      // - "broken_media" (if images/videos missing)
+      // - "duplicate_content" (if duplicate or redirect)
+      // - "no_issues" (if article is complete)
+    ],
+    "confidence": 0.0-1.0,
+    "explanation": "Brief explanation of your assessment"
+  }}
+
+  Focus on:
+  1. Content completeness and logical flow
+  2. Presence of introduction, body, and conclusion
+  3. HTML structure and formatting issues
+  4. Content length and substance
+  5. Technical issues that may affect readability
+
+  Return only valid JSON with no additional text.
