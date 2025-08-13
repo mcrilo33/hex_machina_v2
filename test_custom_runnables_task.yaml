@@ -1,0 +1,40 @@
+task:
+  name: "test_custom_runnables"
+  dataset: true  # Enable task-level dataset generation
+  
+  steps:
+    - name: "fetch_sample_articles"
+      runnable: "ArticleFetcher"
+      dataset: true  # Enable step-level dataset generation
+      config:
+        db_path: "storage/articles14.db"
+        filters:
+          limit: 3  # Just get 3 articles to test with
+    
+    - name: "generate_article_summary"
+      runnable: "MockSummarizer"
+      dataset: true  # Enable step-level dataset generation
+      config:
+        summary_length: "short"
+    
+    - name: "save_summaries"
+      runnable: "EnrichmentSaver"
+      dataset: true  # Enable step-level dataset generation
+      config:
+        db_path: "storage/articles14.db"
+        enrichment_type: "article_summary"
+        input_mapping: "generate_article_summary.summary"
+    
+    - name: "extract_keywords"
+      runnable: "MockKeywordExtractor"
+      dataset: true  # Enable step-level dataset generation
+      config:
+        max_keywords: 5
+    
+    - name: "save_keywords"
+      runnable: "EnrichmentSaver"
+      dataset: true  # Enable step-level dataset generation
+      config:
+        db_path: "storage/articles14.db"
+        enrichment_type: "keywords"
+        input_mapping: "extract_keywords.keywords"

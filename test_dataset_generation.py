@@ -1,105 +1,94 @@
 #!/usr/bin/env python3
 """
-Test script for dataset generation functionality.
+Test script to generate datasets by running a simple task multiple times.
 
-This script tests the new dataset generation system that creates
-LangSmith datasets for individual steps with automatic split creation.
+This script will:
+1. Load the simple task configuration
+2. Run the task with different inputs
+3. Generate datasets for each step and the overall task
 """
 
-import os
-import sys
-
 import yaml
+from dotenv import load_dotenv
 
-# Add the src directory to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
-
-try:
-    from hex_machina.langchain_tasks.builder import TaskBuilder
-    from hex_machina.langchain_tasks.datasets import StepDatasetManager
-    from hex_machina.langchain_tasks.registry import RunnableRegistry
-
-    print("✅ Successfully imported all required modules")
-except ImportError as e:
-    print(f"❌ Import failed: {e}")
-    sys.exit(1)
+from src.hex_machina.langchain_tasks.builder import TaskBuilder
+from src.hex_machina.langchain_tasks.config.models import TaskConfig
+from src.hex_machina.langchain_tasks.datasets import StepDatasetManager
 
 
-def test_dataset_generation():
-    """Test the dataset generation functionality."""
+def main():
+    """Run the simple task multiple times to generate datasets."""
+    print("🚀 Testing Dataset Generation with Simple Task")
+    print("=" * 60)
 
-    print("\n🧪 Testing Dataset Generation System")
-    print("=" * 50)
+    # Load environment variables
+    load_dotenv()
+    print("✅ Environment variables loaded")
 
+    # Load the task configuration
+    with open("test_simple_task_for_datasets.yaml", "r") as f:
+        config_data = yaml.safe_load(f)
+
+    # Parse into TaskConfig
+    task_config = TaskConfig(**config_data)
+    print(f"✅ Loaded task: {task_config.name}")
+    print(f"✅ Steps: {len(task_config.steps)}")
+    print(
+        f"✅ Task-level dataset: {'✅ Enabled' if task_config.dataset else '❌ Disabled'}"
+    )
+
+    # Check step-level datasets
+    for step in task_config.steps:
+        dataset_status = "✅ Enabled" if step.dataset else "❌ Disabled"
+        print(f"   - Step '{step.name}': {dataset_status}")
+
+    # Initialize components
+    print("\n🔧 Initializing components...")
+    dataset_manager = StepDatasetManager()
+    builder = TaskBuilder(dataset_manager=dataset_manager)
+
+    # Test inputs
+    test_inputs = [
+        {"name": "Alice", "style": "formal"},
+        {"name": "Bob", "style": "casual"},
+        {"name": "Charlie", "style": "friendly"},
+        {"name": "Diana", "style": "professional"},
+    ]
+
+    print(f"\n📝 Running task with {len(test_inputs)} different inputs...")
+
+    # Run the task with each input
+    for i, inputs in enumerate(test_inputs):
+        print(f"\n--- Run {i+1}/{len(test_inputs)} ---")
+        print(f"Input: {inputs}")
+
+        try:
+            # Execute the task with tracing and dataset generation
+            result = builder.invoke_with_tracing(task_config, inputs)
+            print("✅ Task completed successfully")
+            print(f"Result: {str(result)[:100]}...")
+
+        except Exception as e:
+            print(f"❌ Task failed: {e}")
+            continue
+
+    # Generate grouped datasets
+    print("\n📊 Generating grouped datasets...")
     try:
-        # Load environment variables
-        from dotenv import load_dotenv
-
-        load_dotenv()
-        print("✅ Environment variables loaded")
-
-        # Create components
-        registry = RunnableRegistry()
-        dataset_manager = StepDatasetManager()
-        builder = TaskBuilder(registry=registry, dataset_manager=dataset_manager)
-
-        print(f"✅ Created TaskBuilder with dataset manager: {builder}")
-
-        # Load task configuration
-        with open("test_task_config.yaml", "r") as file:
-            config = yaml.safe_load(file)
-        print(f"✅ Loaded task config: {config['name']}")
-
-        # Show dataset configuration
-        print("\n📋 Dataset Configuration:")
-        for i, step in enumerate(config["steps"], 1):
-            dataset_enabled = step.get("dataset", False)
-            print(
-                f"   Step {i}: {step['name']} - Dataset: {'✅ Enabled' if dataset_enabled else '❌ Disabled'}"
-            )
-
-        # Test input
-        test_input = {"name": "Charlie"}
-        print(f"\n📥 Test input: {test_input}")
-
-        # Execute with dataset generation
-        print("\n🚀 Executing task with dataset generation...")
-        result = builder.invoke_with_tracing(config, test_input)
-
-        print("✅ Task executed successfully!")
-        print(f"📤 Result: {result}")
-
-        # Show dataset generation summary
-        print("\n📊 Dataset Generation Summary:")
-        status = dataset_manager.get_current_status()
-        for key, value in status.items():
-            print(f"   {key}: {value}")
-
-        print("\n🎯 What to check in LangSmith:")
-        print("1. Go to: https://smith.langchain.com/")
-        print("2. Navigate to project: hex-machina-v2")
-        print("3. Look for datasets:")
-        print("   - simple_hello_task_generate_greeting_YYYYMMDD_HHMMSS")
-        print("   - simple_hello_task_llm_response_YYYYMMDD_HHMMSS")
-        print("4. Check that examples have run_id metadata")
-        print("5. Verify 'small' split is created after 3 examples")
-
-        return True
+        summary = builder.generate_grouped_datasets(task_config)
+        print("✅ Dataset generation completed!")
+        print(f"Summary: {summary}")
 
     except Exception as e:
-        print(f"❌ Test failed: {e}")
-        import traceback
+        print(f"❌ Dataset generation failed: {e}")
 
-        traceback.print_exc()
-        return False
+    print("\n🎉 Dataset generation test completed!")
+    print("=" * 60)
+    print("📋 Next steps:")
+    print("   1. Check LangSmith for generated datasets")
+    print("   2. Use these datasets for experiment evaluation")
+    print("   3. Run experiments with different parameters")
 
 
 if __name__ == "__main__":
-    success = test_dataset_generation()
-
-    if success:
-        print("\n🎉 Dataset generation test completed successfully!")
-        print("Check LangSmith for the created datasets and examples.")
-    else:
-        print("\n🔧 Test failed. Please check the error messages above.")
-        sys.exit(1)
+    main()

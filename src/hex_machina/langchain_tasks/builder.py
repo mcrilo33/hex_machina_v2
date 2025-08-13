@@ -152,9 +152,292 @@ class TaskBuilder(Runnable):
             if len(runnables) == 1:
                 task = runnables[0]
             else:
-                task = RunnableSequence(
-                    first=runnables[0], middle=runnables[1:-1], last=runnables[-1]
-                )
+                # Check if first step is ArticleFetcher - if so, use RunnableLambda.map() for remaining steps
+                if config.steps[0].runnable == "ArticleFetcher" and len(runnables) > 1:
+                    # First step: ArticleFetcher
+                    first_step = runnables[0]
+
+                    # Check if the last step is EnrichmentSaver - if so, implement map-reduce pattern
+                    last_step = config.steps[-1]
+                    if last_step.runnable == "EnrichmentSaver":
+                        # Map-Reduce pattern: process articles individually, then save in batch
+                        from langchain_core.runnables import RunnableLambda
+
+                        # Map phase: process each article through enrichment steps (excluding EnrichmentSaver)
+                        def process_article_through_enrichment_steps(article):
+                            """Process a single article through enrichment steps (map phase)."""
+                            # Start with the article data
+                            current_input = article
+                            result = {}
+
+                            # Run each enrichment step sequentially (excluding EnrichmentSaver)
+                            for i, runnable in enumerate(runnables[1:-1], 1):
+                                step_name = config.steps[i].name
+                                try:
+                                    # Pass the current input to the runnable
+                                    step_result = runnable.invoke(current_input)
+                                    # Store the result with the step name for input_mapping
+                                    result[step_name] = step_result
+                                    # Update current_input for the next step
+                                    current_input = step_result
+                                except Exception as e:
+                                    result[step_name] = {"error": str(e)}
+
+                            # Add the original article
+                            result["article"] = article
+                            return result
+
+                        # Create the enrichment processor with .map() capability
+                        enrichment_processor = RunnableLambda(
+                            process_article_through_enrichment_steps
+                        )
+
+                        # Reduce phase: collect all enrichments and save them in one batch operation
+                        def save_all_enrichments_in_batch(enriched_articles):
+                            """Save all enrichments in batch (reduce phase)."""
+                            if not enriched_articles:
+                                return {"saved_count": 0, "enriched_articles": []}
+
+                            # Debug: Log the structure of enriched articles
+                            self._logger.info(
+                                f"Batch saver received {len(enriched_articles)} enriched articles"
+                            )
+
+                            # Get the EnrichmentSaver config from the last step
+                            enrichment_saver_config = config.steps[-1].config
+
+                            # Extract all enrichments for batch processing
+                            enrichments_to_save = []
+                            for enriched_article in enriched_articles:
+                                try:
+                                    # Extract article_id and content using the same logic as EnrichmentSaver
+                                    article_id = None
+                                    content = None
+
+                                    # Extract article_id (same logic as EnrichmentSaver)
+                                    if "id" in enriched_article:
+                                        article_id = enriched_article["id"]
+                                    elif (
+                                        "article" in enriched_article
+                                        and "id" in enriched_article["article"]
+                                    ):
+                                        # The article data is nested under the 'article' key
+                                        article_id = enriched_article["article"]["id"]
+                                    elif "generate_article_summary" in enriched_article:
+                                        if (
+                                            "id"
+                                            in enriched_article[
+                                                "generate_article_summary"
+                                            ]
+                                        ):
+                                            article_id = enriched_article[
+                                                "generate_article_summary"
+                                            ]["id"]
+
+                                        # Also check if the article data is nested
+                                        if (
+                                            "article" in enriched_article
+                                            and "id" in enriched_article["article"]
+                                        ):
+                                            article_id = enriched_article["article"][
+                                                "id"
+                                            ]
+
+                                    # Extract content using input_mapping
+                                    input_mapping = enrichment_saver_config.get(
+                                        "input_mapping", ""
+                                    )
+                                    if input_mapping:
+                                        path_parts = input_mapping.split(".")
+                                        current = enriched_article
+
+                                        # Debug logging
+                                        self._logger.info(
+                                            f"Extracting content with path: {path_parts}"
+                                        )
+                                        self._logger.info(
+                                            f"Available keys in enriched_article: {list(enriched_article.keys())}"
+                                        )
+
+                                        for part in path_parts:
+                                            if part not in current:
+                                                # Handle nested structure
+                                                if (
+                                                    "generate_article_summary"
+                                                    in enriched_article
+                                                ):
+                                                    nested_content = enriched_article[
+                                                        "generate_article_summary"
+                                                    ]
+                                                    if (
+                                                        "generate_article_summary"
+                                                        in nested_content
+                                                        and part
+                                                        in nested_content[
+                                                            "generate_article_summary"
+                                                        ]
+                                                    ):
+                                                        current = nested_content[
+                                                            "generate_article_summary"
+                                                        ][part]
+                                                        break
+                                                    summaries = nested_content.get(
+                                                        "summaries", []
+                                                    )
+                                                    if (
+                                                        summaries
+                                                        and part in summaries[0]
+                                                    ):
+                                                        current = summaries[0][part]
+                                                        break
+                                                break
+                                            current = current[part]
+
+                                        content = current
+                                        self._logger.info(
+                                            f"Extracted content type: {type(content)}"
+                                        )
+                                        self._logger.info(
+                                            f"Extracted content: {content}"
+                                        )
+
+                                    if article_id and content:
+                                        # Handle StringPromptValue objects from PromptTemplate
+                                        if hasattr(content, "to_string"):
+                                            content = content.to_string()
+                                        elif hasattr(content, "text"):
+                                            content = content.text
+
+                                        self._logger.info(
+                                            f"Final content after conversion: {content}"
+                                        )
+
+                                        enrichments_to_save.append(
+                                            {
+                                                "article_id": article_id,
+                                                "content": content,
+                                                "enrichment_type": enrichment_saver_config.get(
+                                                    "enrichment_type", "unknown"
+                                                ),
+                                                "db_path": enrichment_saver_config.get(
+                                                    "db_path", "storage/articles14.db"
+                                                ),
+                                            }
+                                        )
+                                    else:
+                                        self._logger.warning(
+                                            f"Missing article_id or content: article_id={article_id}, content={content}"
+                                        )
+
+                                except Exception as e:
+                                    self._logger.error(
+                                        f"Failed to extract enrichment data: {e}"
+                                    )
+
+                            # Now save all enrichments in one batch operation
+                            if enrichments_to_save:
+                                try:
+                                    # Use the database connector directly for batch saving
+                                    from hex_machina.langchain_tasks.database.connector import (
+                                        DatabaseConnector,
+                                    )
+
+                                    # Group by db_path for batch operations
+                                    db_groups = {}
+                                    for enrichment in enrichments_to_save:
+                                        db_path = enrichment["db_path"]
+                                        if db_path not in db_groups:
+                                            db_groups[db_path] = []
+                                        db_groups[db_path].append(enrichment)
+
+                                    # Save each group in batch
+                                    total_saved = 0
+                                    for db_path, enrichments in db_groups.items():
+                                        connector = DatabaseConnector(db_path)
+                                        # Batch insert all enrichments for this database
+                                        for enrichment in enrichments:
+                                            connector.save_enrichment(
+                                                article_id=enrichment["article_id"],
+                                                content=enrichment["content"],
+                                                enrichment_type=enrichment[
+                                                    "enrichment_type"
+                                                ],
+                                            )
+                                            total_saved += 1
+
+                                    self._logger.info(
+                                        f"Successfully saved {total_saved} enrichments in batch"
+                                    )
+
+                                except Exception as e:
+                                    self._logger.error(
+                                        f"Failed to save enrichments in batch: {e}"
+                                    )
+
+                            return {
+                                "saved_count": len(enrichments_to_save),
+                                "enriched_articles": enriched_articles,
+                                "batch_operation": True,
+                            }
+
+                        # Create the batch saver
+                        batch_saver = RunnableLambda(save_all_enrichments_in_batch)
+
+                        # Create sequence: ArticleFetcher -> EnrichmentProcessor.map() -> BatchSaver
+                        # Chain the .map() operation directly
+                        task = first_step | enrichment_processor.map() | batch_saver
+
+                        self._logger.info(
+                            f"Created ArticleFetcher + Map-Reduce task: {len(runnables)-2} enrichment steps -> batch save"
+                        )
+                    else:
+                        # Standard map pattern: process each article through all remaining steps
+                        from langchain_core.runnables import RunnableLambda
+
+                        # Create a function that processes each article through all remaining steps
+                        def process_article_through_steps(article):
+                            """Process a single article through all remaining steps."""
+                            # Start with the article data
+                            current_input = article
+                            result = {}
+
+                            # Run each step sequentially on the article
+                            for i, runnable in enumerate(runnables[1:], 1):
+                                step_name = config.steps[i].name
+                                try:
+                                    # Pass the current input to the runnable
+                                    step_result = runnable.invoke(current_input)
+                                    # Store the result with the step name for input_mapping
+                                    result[step_name] = step_result
+                                    # Update current_input for the next step
+                                    current_input = step_result
+                                except Exception as e:
+                                    result[step_name] = {"error": str(e)}
+
+                            # Add the original article at the end
+                            result["article"] = article
+                            return result
+
+                        # Create the article processor with .map() capability
+                        article_processor = RunnableLambda(
+                            process_article_through_steps
+                        )
+
+                        # Create sequence: ArticleFetcher -> ArticleProcessor.map()
+                        # This will automatically map over each article from ArticleFetcher
+                        task = RunnableSequence(
+                            first=first_step,
+                            last=article_processor.map(),  # .map() is the key!
+                        )
+
+                        self._logger.info(
+                            f"Created ArticleFetcher + ArticleProcessor.map() task with {len(runnables)-1} processing steps"
+                        )
+                else:
+                    # Standard RunnableSequence for non-ArticleFetcher tasks
+                    task = RunnableSequence(
+                        first=runnables[0], middle=runnables[1:-1], last=runnables[-1]
+                    )
 
             # Add metadata if the task supports it
             if hasattr(task, "metadata"):
@@ -250,8 +533,10 @@ class TaskBuilder(Runnable):
                 result = task.invoke(inputs)
 
                 # Generate datasets if enabled
-            if self.dataset_manager:
-                self._generate_datasets_from_result(config, inputs, result, run_tree)
+                if self.dataset_manager:
+                    self._generate_datasets_from_result(
+                        config, inputs, result, run_tree
+                    )
 
                 # Log the result
                 run_tree.end(outputs={"result": result})
@@ -391,8 +676,109 @@ class TaskBuilder(Runnable):
 
             self._pending_traces.append(trace_data)
 
+            # Generate step-level datasets immediately if enabled
+            self._generate_step_datasets_immediately(config, inputs, result, run_id)
+
         except Exception as e:
             self._logger.warning(f"Dataset generation failed: {e}")
+
+    def _generate_step_datasets_immediately(
+        self, config: TaskConfig, inputs: Dict[str, Any], result: Any, run_id: str
+    ) -> None:
+        """Generate step-level datasets immediately after task execution.
+
+        Args:
+            config: Task configuration
+            inputs: Task inputs
+            result: Task execution result
+            run_id: Current run ID
+        """
+        try:
+            # For each step that has dataset generation enabled
+            for step_config in config.steps:
+                if step_config.dataset:
+                    self._logger.info(
+                        f"Generating dataset for step: {step_config.name}"
+                    )
+
+                    # Create step dataset
+                    step_dataset_config = StepDataset(enabled=True)
+                    dataset = self.dataset_manager.prepare_step_dataset(
+                        step_name=step_config.name, step_config=step_dataset_config
+                    )
+
+                    if dataset:
+                        # For now, just record the step execution with basic info
+                        # The actual trace grouping will happen later when we have access to LangSmith traces
+                        self.dataset_manager.record_step_execution(
+                            step_name=step_config.name,
+                            inputs={
+                                "step_name": step_config.name,
+                                "runnable": step_config.runnable,
+                                "config": step_config.config or {},
+                                "task_inputs": inputs,
+                            },
+                            outputs={
+                                "result_type": type(result).__name__,
+                                "result_summary": str(result)[:200],
+                            },
+                            additional_metadata={
+                                "step_runnable": step_config.runnable,
+                                "run_id": run_id,
+                                "data_source": "immediate_execution",
+                                "run_type": "tool",
+                                "step_extra": step_config.config or {},
+                            },
+                        )
+
+                        self._logger.info(
+                            f"✅ Step dataset '{step_config.name}' prepared for trace grouping"
+                        )
+
+        except Exception as e:
+            self._logger.error(f"Failed to generate step datasets immediately: {e}")
+
+    def _extract_step_data_from_result(
+        self,
+        step_name: str,
+        step_config: StepConfig,
+        inputs: Dict[str, Any],
+        result: Any,
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Extract step-specific data from the task execution result.
+
+        This method is now simplified to be agnostic to specific runnable types.
+        The actual data extraction should happen during trace analysis.
+
+        Args:
+            step_name: Name of the step
+            step_config: Step configuration
+            inputs: Task inputs
+            result: Task execution result
+
+        Returns:
+            Basic step data structure
+        """
+        try:
+            # Return basic step info - the actual data will come from LangSmith traces
+            return [
+                {
+                    "inputs": {
+                        "step_name": step_name,
+                        "runnable": step_config.runnable,
+                        "config": step_config.config or {},
+                        "task_inputs": inputs,
+                    },
+                    "outputs": {
+                        "result_type": type(result).__name__,
+                        "result_summary": str(result)[:200],
+                    },
+                }
+            ]
+
+        except Exception as e:
+            self._logger.warning(f"Failed to extract step data for {step_name}: {e}")
+            return None
 
     def generate_grouped_datasets(self, config: TaskConfig) -> Dict[str, Any]:
         """Generate grouped datasets from all pending traces.
@@ -439,7 +825,7 @@ class TaskBuilder(Runnable):
                     for trace_data in self._pending_traces:
                         self._add_task_trace_to_dataset(trace_data, task_dataset)
 
-            # Create or update datasets for each step
+            # Create or update datasets for each step with actual trace data
             for step_name, traces in step_traces.items():
                 self._logger.info(
                     f"Processing {len(traces)} traces for step: {step_name}"
@@ -452,9 +838,36 @@ class TaskBuilder(Runnable):
                 )
 
                 if dataset:
-                    # Add examples from all traces for this step
-                    for trace_data in traces:
-                        self._add_trace_to_dataset(step_name, trace_data, dataset)
+                    # Extract actual execution data from LangSmith traces for each article
+                    step_examples = self._extract_step_examples_from_traces(
+                        step_name, traces
+                    )
+
+                    if step_examples:
+                        # Add each example to the step dataset
+                        for i, example in enumerate(step_examples):
+                            self.dataset_manager.record_step_execution(
+                                step_name=step_name,
+                                inputs=example["inputs"],
+                                outputs=example["outputs"],
+                                additional_metadata={
+                                    "step_runnable": example.get("runnable", "unknown"),
+                                    "run_id": example.get("run_id", "unknown"),
+                                    "data_source": "langsmith_trace_analysis",
+                                    "run_type": example.get("run_type", "tool"),
+                                    "step_extra": example.get("extra", {}),
+                                    "article_index": i,
+                                    "total_articles": len(step_examples),
+                                },
+                            )
+
+                        self._logger.info(
+                            f"✅ Step dataset '{step_name}' populated with {len(step_examples)} examples"
+                        )
+                    else:
+                        self._logger.warning(
+                            f"No examples extracted for step: {step_name}"
+                        )
 
             # Clear pending traces
             self._pending_traces = []
@@ -468,6 +881,106 @@ class TaskBuilder(Runnable):
         except Exception as e:
             self._logger.error(f"Failed to generate grouped datasets: {e}")
             return {}
+
+    def _extract_step_examples_from_traces(
+        self, step_name: str, traces: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Extract step examples from LangSmith traces.
+
+        Args:
+            step_name: Name of the step to extract
+            traces: List of trace data
+
+        Returns:
+            List of step examples with inputs/outputs
+        """
+        try:
+            from langsmith import Client
+
+            client = Client()
+            project_name = os.getenv("LANGCHAIN_PROJECT", "hex-machina-v2")
+            examples = []
+
+            for trace_data in traces:
+                run_tree = trace_data["run_tree"]
+                trace_id = getattr(run_tree, "id", None)
+
+                if not trace_id:
+                    continue
+
+                # Query LangSmith for step executions in this trace
+                filter_query = f'eq(trace_id, "{trace_id}")'
+                trace_runs = client.list_runs(
+                    project_name=project_name,
+                    filter=filter_query,
+                    select=[
+                        "name",
+                        "inputs",
+                        "outputs",
+                        "run_type",
+                        "extra",
+                        "parent_run_id",
+                        "id",
+                    ],
+                )
+
+                trace_runs_list = list(trace_runs)
+                child_runs = [run for run in trace_runs_list if run.id != trace_id]
+
+                # Find runs that match our step
+                for run in child_runs:
+                    # Check if this run corresponds to our step
+                    if self._is_run_for_step(run, step_name):
+                        example = {
+                            "inputs": run.inputs or {},
+                            "outputs": run.outputs or {},
+                            "runnable": run.name,
+                            "run_id": str(run.id),
+                            "run_type": run.run_type,
+                            "extra": run.extra or {},
+                        }
+                        examples.append(example)
+
+            return examples
+
+        except Exception as e:
+            self._logger.warning(f"Failed to extract step examples from traces: {e}")
+            return []
+
+    def _is_run_for_step(self, run: Any, step_name: str) -> bool:
+        """Check if a LangSmith run corresponds to a specific step.
+
+        Args:
+            run: LangSmith run object
+            step_name: Name of the step to check
+
+        Returns:
+            True if the run corresponds to the step
+        """
+        try:
+            # Check if the run name matches the step name
+            if run.name == step_name:
+                return True
+
+            # Check if the run has metadata indicating the step
+            if run.extra and isinstance(run.extra, dict):
+                metadata = run.extra.get("metadata", {})
+                if isinstance(metadata, dict):
+                    run_step_name = metadata.get("step_name")
+                    if run_step_name == step_name:
+                        return True
+
+            # Check if the run has tags indicating the step
+            if hasattr(run, "tags") and run.tags:
+                for tag in run.tags:
+                    if tag.startswith(f"step:{step_name}"):
+                        return True
+
+            return False
+
+        except Exception as e:
+            self._logger.debug(f"Error checking if run is for step {step_name}: {e}")
+            return False
 
     def _add_task_trace_to_dataset(
         self, trace_data: Dict[str, Any], task_dataset: Any

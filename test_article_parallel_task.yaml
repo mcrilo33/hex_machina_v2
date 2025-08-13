@@ -1,0 +1,30 @@
+name: "article_parallel_processing"
+description: "Simple test: ArticleFetcher + RunnableParallel for individual article processing"
+dataset: true
+
+steps:
+  - name: "fetch_articles"
+    runnable: "ArticleFetcher"
+    dataset: true
+    config:
+      db_path: "storage/articles14.db"
+      filters:
+        limit: 2
+
+  - name: "summarize_article"
+    runnable: "ArticleProcessor"
+    dataset: true
+    config:
+      processor_type: "summarize"
+      summary_length: "short"
+
+  - name: "extract_keywords"
+    runnable: "ArticleProcessor"
+    dataset: true
+    config:
+      processor_type: "extract_keywords"
+      max_keywords: 3
+
+metadata:
+  task_type: "article_parallel_processing"
+  version: "1.0"

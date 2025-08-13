@@ -1,20 +1,15 @@
 """
 Evaluation module for LangChain tasks.
 
-This module provides:
-- Base evaluator classes
-- Evaluator registry
-- Step-specific evaluation
-- LangSmith integration
+This module provides evaluation functionality using LangSmith's aevaluate,
+following LangSmith's evaluation philosophy and patterns.
 """
 
-from .base import BaseEvaluator, EvaluatorConfig
-from .langsmith import LangSmithEvaluator
-from .registry import EvaluatorRegistry
+from .registry import EvaluatorRegistry, evaluator_registry
+from .runner import EvaluationRunner
 
 __all__ = [
-    "BaseEvaluator",
-    "EvaluatorConfig",
     "EvaluatorRegistry",
-    "LangSmithEvaluator",
+    "evaluator_registry",
+    "EvaluationRunner",
 ]

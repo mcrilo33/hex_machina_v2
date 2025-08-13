@@ -41,7 +41,6 @@ class ArticleDB(Base):
     ingestion_operation = relationship(
         "IngestionOperationDB", back_populates="articles"
     )
-    enrichments = relationship("EnrichmentDB", back_populates="article")
 
     # Unique constraint on url_domain and title
     __table_args__ = (
@@ -67,27 +66,15 @@ class IngestionOperationDB(Base):
 
 
 class EnrichmentDB(Base):
-    """Database model for enrichment results."""
+    """Simplified enrichment model - only essential fields."""
 
     __tablename__ = "enrichments"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    article_id = Column(Integer, ForeignKey("articles.id"), nullable=False)
-    langsmith_run_id = Column(String(255), nullable=False)
-    langsmith_trace_id = Column(String(255), nullable=False)
-    enrichment_name = Column(String(100), nullable=False)
-    enrichment_data = Column(JSON, nullable=True)
-    enrichment_error_status = Column(String(50), nullable=True)
-    enrichment_error_message = Column(Text, nullable=True)
+    article_id = Column(Integer, nullable=False)  # Generic foreign key, no relationship
+    enrichment_type = Column(String(100), nullable=False)
+    content = Column(JSON, nullable=False)  # The actual enrichment data
+    enrichment_metadata = Column(JSON, nullable=True)  # Auto-generated metadata as JSON
     created_at = Column(DateTime, default=datetime.now)
 
-    # Additional fields needed by enrichment storage
-    workflow_operation_id = Column(String(255), nullable=True)
-    enrichment_type = Column(String(100), nullable=True)
-    source = Column(String(100), nullable=True)
-    tool_name = Column(String(100), nullable=True)
-    tool_params = Column(JSON, nullable=True)
-    version = Column(String(20), nullable=True)
-
-    # Relationships
-    article = relationship("ArticleDB", back_populates="enrichments")
+    # No relationships - completely decoupled

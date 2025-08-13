@@ -1,0 +1,84 @@
+name: "greeting_quality_experiments_with_variations"
+description: "Experiments with task variations and evaluation over existing datasets"
+
+# Task configuration with multiple values (will generate variations)
+task:
+  name: "greeting_task_variations"
+  description: "Greeting generation with different parameters"
+  steps:
+    - name: "generate_greeting"
+      runnable: "PromptTemplate"
+      dataset: true
+      config:
+        template: "Generate a greeting for {name}. Make it {style}."
+        input_variables: ["name", "style"]
+    
+    - name: "llm_response"
+      runnable: "ChatOpenAI"
+      dataset: true
+      config:
+        # Multiple values = multiple task variations
+        temperature: [0.1, 0.7, 1.0]
+        model: ["gpt-4", "gpt-3.5-turbo"]
+        max_tokens: [100, 200]
+
+# Evaluation configuration with target datasets
+evaluations:
+  # Step-level evaluations
+  steps:
+    generate_greeting:
+      target_datasets:
+        - "simple_greeting_task_generate_greeting_20250813_090059"
+      evaluators:
+        - name: "helpfulness_scorer"
+          type: "custom_function"
+          description: "Evaluate helpfulness of prompt generation"
+          parameters:
+            min_length_threshold: 50
+            max_length_threshold: 200
+            length_weight: 0.7
+            content_weight: 0.3
+    
+    llm_response:
+      target_datasets:
+        - "simple_greeting_task_llm_response_20250813_090115"
+      evaluators:
+        - name: "helpfulness_scorer"
+          type: "custom_function"
+          description: "Evaluate helpfulness of LLM responses"
+          parameters:
+            min_length_threshold: 50
+            max_length_threshold: 200
+            length_weight: 0.6
+            content_weight: 0.4
+      
+        - name: "conciseness_scorer"
+          type: "custom_function"
+          description: "Evaluate conciseness of responses"
+          parameters:
+            optimal_length: 100
+            length_tolerance: 50
+            max_score_length: 150
+            penalty_for_verbosity: true
+  
+  # Task-level evaluation (end-to-end)
+  task:
+    target_datasets:
+      - "simple_greeting_task_task_20250813_090055"
+    evaluators:
+      - name: "overall_quality_scorer"
+        type: "custom_function"
+        description: "Evaluate overall task quality"
+        parameters:
+          helpfulness_weight: 0.6
+          conciseness_weight: 0.4
+          bonus_for_consistency: true
+
+# Global experiment settings
+settings:
+  experiment_prefix: "variation_experiments"
+  save_results: true
+  metadata:
+    project: "hex_machina_v2"
+    evaluation_type: "task_variations_with_evaluation"
+    version: "1.0.0"
