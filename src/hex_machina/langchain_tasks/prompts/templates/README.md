@@ -19,28 +19,28 @@ name: "template_name"                    # Required: Unique identifier
 description: "What this template does"   # Required: Human-readable description
 template: |
   # ROLE
-  {ROLE_PLACEHOLDER}
+  {role}
 
   # GOAL
-  {GOAL_PLACEHOLDER}
+  {goal}
 
   # CONTEXT
-  {CONTEXT_PLACEHOLDER}
+  {context}
 
   # INPUTS
-  {INPUTS_PLACEHOLDER}
+  {inputs}
 
   # INSTRUCTIONS
-  {INSTRUCTIONS_PLACEHOLDER}
+  {instructions}
 
   # CONSTRAINTS
-  {CONSTRAINTS_PLACEHOLDER}
+  {constraints}
 
   # OUTPUTS
-  {OUTPUTS_PLACEHOLDER}
+  {outputs}
 
   # START
-  {START_PLACEHOLDER}
+  {start}
 ```
 
 ### Section Descriptions
@@ -54,20 +54,23 @@ template: |
 - **OUTPUTS**: Expected format and structure of the response
 - **START**: Action trigger to begin the task
 
-## Variable Delimiters
+## Clear Beginning and Ending Patterns
 
-Variables are clearly delimited using double angle brackets `<<VARIABLE_NAME>>` to help the model understand where variables should be placed:
+Each section follows a clear pattern that helps the model understand the structure:
 
 ```yaml
-# INPUTS
-TITLE: <<TITLE>>
-CONTENT: <<TEXT_CONTENT>>
+# SECTION_NAME
+{section_content}
+
+# NEXT_SECTION
+{next_section_content}
 ```
 
-This format makes it clear to the model:
-- Where variables should be inserted
-- What the expected variable names are
-- How to format the final prompt
+This pattern provides:
+- **Clear section headers** with `#` markers
+- **Consistent spacing** between sections
+- **Obvious structure** that models can follow
+- **Easy identification** of where each section begins and ends
 
 ## Example Templates
 
@@ -86,8 +89,8 @@ template: |
   Articles are automatically retrieved from HTML pages...
 
   # INPUTS
-  TITLE: <<TITLE>>
-  CONTENT: <<TEXT_CONTENT>>
+  TITLE: {title}
+  CONTENT: {text_content}
 
   # INSTRUCTIONS
   1. Analyze the article title and content for completeness...
@@ -117,7 +120,7 @@ template: |
   Keywords are essential for content categorization...
 
   # INPUTS
-  TEXT: <<TEXT_CONTENT>>
+  TEXT: {text_content}
 
   # INSTRUCTIONS
   1. Read and analyze the provided text content...
@@ -140,16 +143,16 @@ template: |
 
 ## Template Variables
 
-Use double angle brackets to clearly delimit variables that will be filled at runtime:
+Use curly braces `{}` to define variables that will be filled at runtime:
 
 ```yaml
 template: |
   # INPUTS
-  TITLE: <<TITLE>>
-  CONTENT: <<TEXT_CONTENT>>
+  TITLE: {title}
+  CONTENT: {text_content}
 ```
 
-Variables like `<<TITLE>>` and `<<TEXT_CONTENT>>` will be replaced with actual values when the template is used. The double angle brackets make it clear to the model where variables should be placed.
+Variables like `{title}` and `{text_content}` will be replaced with actual values when the template is used. The clear section structure with `#` headers and consistent spacing makes it easy for models to understand where variables should be placed.
 
 ## Best Practices
 
@@ -161,7 +164,8 @@ Variables like `<<TITLE>>` and `<<TEXT_CONTENT>>` will be replaced with actual v
 6. **Defined Constraints**: Set clear boundaries and limitations
 7. **Structured Outputs**: Specify exact response formats
 8. **Actionable Start**: Provide clear action triggers
-9. **Clear Variables**: Use `<<VARIABLE_NAME>>` format for all variables
+9. **Consistent Formatting**: Use `#` headers and consistent spacing
+10. **Clear Variables**: Use `{variable_name}` format for all variables
 
 ## Usage in Tasks
 

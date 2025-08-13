@@ -11,7 +11,7 @@ template: |
   Summaries help readers quickly understand the main points and key information from longer texts, making content more accessible and digestible.
 
   # INPUTS
-  TEXT: <<TEXT_CONTENT>>
+  TEXT: {text_content}
 
   # INSTRUCTIONS
   1. Read and comprehend the full text content

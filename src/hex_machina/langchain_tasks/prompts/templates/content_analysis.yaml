@@ -11,7 +11,7 @@ template: |
   Content analysis helps understand the value, structure, and characteristics of text content, enabling better content management and decision-making.
 
   # INPUTS
-  TEXT: <<TEXT_CONTENT>>
+  TEXT: {text_content}
 
   # INSTRUCTIONS
   1. Read and analyze the provided text content thoroughly
