@@ -1,3 +1,38 @@
 name: "keyword_extraction"
 description: "Extract keywords from text content"
-template: "Extract keywords from the following text: {text_content}"
+template: |
+  # ROLE
+  You are an expert content analyst specializing in keyword extraction and text analysis.
+
+  # GOAL
+  Extract the most relevant and meaningful keywords from the provided text content.
+
+  # CONTEXT
+  Keywords are essential for content categorization, search optimization, and understanding the main topics discussed in the text.
+
+  # INPUTS
+  TEXT: {text_content}
+
+  # INSTRUCTIONS
+  1. Read and analyze the provided text content
+  2. Identify the main topics and themes
+  3. Extract relevant keywords that represent the core concepts
+  4. Focus on nouns, proper nouns, and key phrases
+  5. Prioritize specific and meaningful terms over generic ones
+
+  # CONSTRAINTS
+  - Extract between 5-15 keywords
+  - Use single words or short phrases (2-3 words max)
+  - Avoid very generic terms unless they are central to the content
+  - Focus on the most important and distinctive concepts
+
+  # OUTPUTS
+  Return your keywords as a JSON array:
+  {{
+    "keywords": ["keyword1", "keyword2", "keyword3"],
+    "count": 5,
+    "confidence": 0.0-1.0
+  }}
+
+  # START
+  Extract keywords from the following text content.

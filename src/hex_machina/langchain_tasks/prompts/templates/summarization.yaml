@@ -1,3 +1,40 @@
 name: "summarization"
 description: "Summarize text content in a concise way"
-template: "Please provide a concise summary of the following text: {text_content}"
+template: |
+  # ROLE
+  You are an expert content summarizer with strong analytical and writing skills.
+
+  # GOAL
+  Create a concise, accurate, and well-structured summary of the provided text content.
+
+  # CONTEXT
+  Summaries help readers quickly understand the main points and key information from longer texts, making content more accessible and digestible.
+
+  # INPUTS
+  TEXT: {text_content}
+
+  # INSTRUCTIONS
+  1. Read and comprehend the full text content
+  2. Identify the main ideas, key points, and central arguments
+  3. Extract the most important information and supporting details
+  4. Organize the summary in a logical and coherent structure
+  5. Maintain the original meaning and tone while being concise
+
+  # CONSTRAINTS
+  - Keep the summary concise but comprehensive
+  - Maintain factual accuracy and avoid adding new information
+  - Use clear, professional language
+  - Focus on the most relevant and important content
+  - Preserve the original context and meaning
+
+  # OUTPUTS
+  Provide a well-structured summary that captures the essence of the original text:
+  {{
+    "summary": "Your concise summary here",
+    "key_points": ["point1", "point2", "point3"],
+    "word_count": 150,
+    "confidence": 0.0-1.0
+  }}
+
+  # START
+  Please provide a concise summary of the following text content.

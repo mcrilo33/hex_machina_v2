@@ -1,17 +1,38 @@
 name: "article_completeness"
 description: "Detect if an article is complete based on title and content analysis"
 template: |
-  Analyze the following article to determine if it's complete and identify any completeness issues.
+  # ROLE
+  You are an expert content analyst specializing in web content quality assessment and HTML scraping validation.
 
+  # GOAL
+  Determine if an article retrieved from an HTML page is complete and identify any completeness issues that would affect its usability.
+
+  # CONTEXT
+  Articles are automatically retrieved from HTML pages, which can introduce various issues like content truncation, missing sections, paywall restrictions, or technical problems that make the content incomplete or unusable.
+
+  # INPUTS
   TITLE: {title}
   CONTENT: {text_content}
 
-  Evaluate the article for completeness and provide your assessment in the following JSON format:
+  # INSTRUCTIONS
+  1. Analyze the article title and content for completeness
+  2. Check for logical flow and structural integrity
+  3. Identify any technical or content issues
+  4. Assess the overall quality and usability of the article
+  5. Provide a structured assessment with specific reasons
 
+  # CONSTRAINTS
+  - Use only the predefined reason codes provided
+  - Return only valid JSON with no additional text
+  - Base your assessment on the content provided, not external knowledge
+  - Be objective and systematic in your evaluation
+
+  # OUTPUTS
+  Return your assessment in this exact JSON format:
   {{
     "is_complete": true/false,
     "reasons": [
-      // List specific reasons from this predefined set:
+      // Use only these predefined reasons:
       // - "content_truncated" (if article ends abruptly)
       // - "missing_sections" (if key sections are missing)
       // - "malformed_html" (if HTML issues affect content)
@@ -28,11 +49,5 @@ template: |
     "explanation": "Brief explanation of your assessment"
   }}
 
-  Focus on:
-  1. Content completeness and logical flow
-  2. Presence of introduction, body, and conclusion
-  3. HTML structure and formatting issues
-  4. Content length and substance
-  5. Technical issues that may affect readability
-
-  Return only valid JSON with no additional text.
+  # START
+  Analyze the following article to determine if it's complete and identify any completeness issues.
