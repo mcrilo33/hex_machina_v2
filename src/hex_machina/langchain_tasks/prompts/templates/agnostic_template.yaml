@@ -2,25 +2,25 @@ name: "agnostic_template"
 description: "Base template structure for all prompt templates - defines standard sections and format"
 template: |
   # ROLE
-  {role}
+  {ROLE_PLACEHOLDER}
 
   # GOAL
-  {goal}
+  {GOAL_PLACEHOLDER}
 
   # CONTEXT
-  {context}
+  {CONTEXT_PLACEHOLDER}
 
   # INPUTS
-  {inputs}
+  {INPUTS_PLACEHOLDER}
 
   # INSTRUCTIONS
-  {instructions}
+  {INSTRUCTIONS_PLACEHOLDER}
 
   # CONSTRAINTS
-  {constraints}
+  {CONSTRAINTS_PLACEHOLDER}
 
   # OUTPUTS
-  {outputs}
+  {OUTPUTS_PLACEHOLDER}
 
   # START
-  {start}
+  {START_PLACEHOLDER}

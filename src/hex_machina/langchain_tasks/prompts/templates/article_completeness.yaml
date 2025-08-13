@@ -11,8 +11,8 @@ template: |
   Articles are automatically retrieved from HTML pages, which can introduce various issues like content truncation, missing sections, paywall restrictions, or technical problems that make the content incomplete or unusable.
 
   # INPUTS
-  TITLE: {title}
-  CONTENT: {text_content}
+  TITLE: <<TITLE>>
+  CONTENT: <<TEXT_CONTENT>>
 
   # INSTRUCTIONS
   1. Analyze the article title and content for completeness

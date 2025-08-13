@@ -11,7 +11,7 @@ template: |
   Keywords are essential for content categorization, search optimization, and understanding the main topics discussed in the text.
 
   # INPUTS
-  TEXT: {text_content}
+  TEXT: <<TEXT_CONTENT>>
 
   # INSTRUCTIONS
   1. Read and analyze the provided text content
