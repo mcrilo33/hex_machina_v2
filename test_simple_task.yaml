@@ -1,0 +1,14 @@
+name: "simple_prompt_task"
+description: "A simple task that only uses PromptTemplate to demonstrate the system"
+steps:
+  - name: "format_greeting"
+    runnable: "PromptTemplate"
+    config:
+      template: "Hello {name}! Welcome to our system. Today is {date}."
+
+global_config:
+  cache: true
+
+metadata:
+  task_type: "prompt_formatting"
+  version: "1.0"

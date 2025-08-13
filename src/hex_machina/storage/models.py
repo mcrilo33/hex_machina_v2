@@ -66,20 +66,6 @@ class IngestionOperationDB(Base):
     articles = relationship("ArticleDB", back_populates="ingestion_operation")
 
 
-class WorkflowOperationDB(Base):
-    """Database model for workflow operations."""
-
-    __tablename__ = "workflow_operations"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    workflow_name = Column(String(255), nullable=False)
-    parameters = Column(JSON, nullable=True)
-    started_at = Column(DateTime, nullable=False)
-    finished_at = Column(DateTime, nullable=True)
-    status = Column(String(50), default="running")
-    notes = Column(Text, nullable=True)
-
-
 class EnrichmentDB(Base):
     """Database model for enrichment results."""
 
@@ -87,58 +73,21 @@ class EnrichmentDB(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     article_id = Column(Integer, ForeignKey("articles.id"), nullable=False)
-    workflow_operation_id = Column(String(255), nullable=True)
-    enrichment_type = Column(String(100), nullable=False)
+    langsmith_run_id = Column(String(255), nullable=False)
+    langsmith_trace_id = Column(String(255), nullable=False)
+    enrichment_name = Column(String(100), nullable=False)
     enrichment_data = Column(JSON, nullable=True)
-    source = Column(String(100), nullable=False)
-    tool_name = Column(String(100), nullable=False)
-    tool_params = Column(JSON, nullable=True)
+    enrichment_error_status = Column(String(50), nullable=True)
+    enrichment_error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
-    version = Column(String(20), default="1.0.0")
+
+    # Additional fields needed by enrichment storage
+    workflow_operation_id = Column(String(255), nullable=True)
+    enrichment_type = Column(String(100), nullable=True)
+    source = Column(String(100), nullable=True)
+    tool_name = Column(String(100), nullable=True)
+    tool_params = Column(JSON, nullable=True)
+    version = Column(String(20), nullable=True)
 
     # Relationships
     article = relationship("ArticleDB", back_populates="enrichments")
-
-
-class DatasetDB(Base):
-    """Database model for datasets."""
-
-    __tablename__ = "datasets"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String(255), unique=True, nullable=False)
-    description = Column(Text, nullable=True)
-    data_type = Column(String(50), default="kv")  # kv, chat
-    dataset_metadata = Column(
-        JSON, nullable=True
-    )  # Renamed from metadata to avoid SQLAlchemy conflict
-    langsmith_dataset_id = Column(String(255), nullable=True)
-    created_at = Column(DateTime, default=datetime.now)
-    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
-
-    # Relationships
-    examples = relationship("DatasetExampleDB", back_populates="dataset")
-
-
-class DatasetExampleDB(Base):
-    """Database model for dataset examples."""
-
-    __tablename__ = "dataset_examples"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=False)
-    article_id = Column(Integer, ForeignKey("articles.id"), nullable=False)
-    inputs = Column(JSON, nullable=False)  # LangSmith format
-    outputs = Column(JSON, nullable=True)  # Expected outputs
-    example_metadata = Column(
-        JSON, nullable=True
-    )  # Renamed from metadata to avoid SQLAlchemy conflict
-    split = Column(
-        String(50), nullable=True
-    )  # train, validation, test, custom, or NULL for default split
-    langsmith_example_id = Column(String(255), nullable=True)
-    created_at = Column(DateTime, default=datetime.now)
-
-    # Relationships
-    dataset = relationship("DatasetDB", back_populates="examples")
-    article = relationship("ArticleDB")

@@ -17,7 +17,7 @@ from langchain.evaluation import (
 from langchain_core.language_models import BaseLLM
 from langchain_openai import ChatOpenAI
 
-from src.hex_machina.datasets.manager import DatasetManager
+from src.hex_machina.enrichment.evaluation.langsmith.datasets.dataset_manager import EvaluationDatasetManager
 from src.hex_machina.enrichment.evaluation.langsmith import create_evaluation_experiment
 from src.hex_machina.storage.manager import get_storage_manager
 from src.hex_machina.storage.models import ArticleDB, EnrichmentDB
@@ -166,7 +166,7 @@ def evaluate_dataset_examples(
     """
 
     # Get dataset manager
-    dataset_manager = DatasetManager()
+            dataset_manager = EvaluationDatasetManager()
 
     # Get dataset examples
     examples = dataset_manager.list_articles_in_dataset(dataset_name, split=split)

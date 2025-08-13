@@ -15,8 +15,10 @@ from langchain.evaluation import (
     StringDistanceEvalChain,
 )
 
-from src.hex_machina.datasets.manager import DatasetManager
 from src.hex_machina.enrichment.evaluation.config import EvaluationConfig
+from src.hex_machina.enrichment.evaluation.langsmith.datasets.dataset_manager import (
+    EvaluationDatasetManager,
+)
 from src.hex_machina.enrichment.evaluation.langsmith_integration import (
     create_evaluation_experiment,
 )
@@ -173,7 +175,7 @@ def evaluate_dataset_examples(
     """
 
     # Get dataset manager
-    dataset_manager = DatasetManager()
+    dataset_manager = EvaluationDatasetManager()
 
     # Get dataset examples
     examples = dataset_manager.list_articles_in_dataset(dataset_name, split=split)

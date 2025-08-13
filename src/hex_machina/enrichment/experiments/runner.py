@@ -8,9 +8,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from src.hex_machina.datasets.manager import DatasetManager
 from src.hex_machina.enrichment.evaluation.evaluation_functions import (
     evaluate_dataset_examples,
+)
+from src.hex_machina.enrichment.evaluation.langsmith.datasets.dataset_manager import (
+    EvaluationDatasetManager,
 )
 from src.hex_machina.enrichment.evaluation.langsmith_integration import (
     create_evaluation_experiment,
@@ -27,7 +29,7 @@ class ExperimentRunner:
 
     def __init__(self):
         self.storage_manager = get_storage_manager()
-        self.dataset_manager = DatasetManager()
+        self.dataset_manager = EvaluationDatasetManager()
 
     async def run_experiment(self, config: ExperimentConfig) -> Dict[str, Any]:
         """

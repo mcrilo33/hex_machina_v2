@@ -4,7 +4,7 @@ Main CLI entry point for hex_machina.
 
 import click
 
-from src.hex_machina.cli.datasets.main import manage
+# from src.hex_machina.cli.datasets.main import manage  # Removed - DatasetDB no longer exists
 from src.hex_machina.cli.evaluation.main import evaluation
 from src.hex_machina.cli.tasks.main import tasks_cli
 
@@ -17,7 +17,7 @@ def cli():
 
 # Add subcommands
 cli.add_command(tasks_cli)
-cli.add_command(manage)
+# cli.add_command(manage)  # Removed - DatasetDB no longer exists
 cli.add_command(evaluation)
 
 

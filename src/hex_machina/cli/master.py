@@ -2,7 +2,7 @@
 
 import click
 
-from .datasets.main import manage
+# from .datasets.main import manage  # Removed - DatasetDB no longer exists
 from .evaluation.main import evaluation
 from .experiments.main import experiments
 from .tasks import tasks_cli
@@ -20,7 +20,7 @@ def master_cli():
 
 # Add sub-commands for each CLI
 master_cli.add_command(tasks_cli, name="tasks")
-master_cli.add_command(manage, name="datasets")
+# master_cli.add_command(manage, name="datasets")  # Removed - DatasetDB no longer exists
 master_cli.add_command(evaluation, name="evaluation")
 master_cli.add_command(experiments, name="experiments")
 
