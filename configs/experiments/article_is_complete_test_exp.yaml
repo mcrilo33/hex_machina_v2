@@ -1,0 +1,43 @@
+name: ArticleIsCompleteTestExp
+description: "Article is complete test experiment"
+
+task:
+  name: "ArticleIsCompleteTask"
+  steps:
+    - name: fetch_articles
+      runnable: ArticleFetcher
+      config:
+        db_path: "storage/articles14.db"
+        filters:
+          limit: 5
+      dataset: false
+
+    - name: prompt_template
+      runnable: PromptTemplate
+      config:
+        prompt_name: "article_completeness"
+      dataset: false
+
+    - name: llm_processor
+      runnable: ChatOpenAI
+      config:
+        model: ["deepseek/deepseek-chat-v3-0324:free"]
+        temperature: 0.0
+        max_tokens: 4000
+        base_url: "https://openrouter.ai/api/v1"
+        api_key: "${OPENROUTER_API_KEY}"
+      dataset: false
+
+evaluations:
+  steps:
+    llm_processor:
+      evaluators:
+        - name: json_equality
+          type: "JsonEqualityEvaluator"
+          description: "Evaluate if the LLM output matches expected JSON structure"
+      target_datasets: ["ArticleIsCompleteTask_llm_processor_20250814_103511"]
+
+metadata:
+  category: "article_is_complete"
+  tags:
+    - "article_is_complete_test_exp"

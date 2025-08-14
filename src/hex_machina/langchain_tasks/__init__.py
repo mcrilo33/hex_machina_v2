@@ -15,7 +15,6 @@ from .config.models import (
 )
 from .datasets import StepDatasetManager
 from .evaluation.registry import EvaluatorRegistry
-from .experiments import YAMLExperimentRunner
 from .registry import RunnableRegistry
 
 __version__ = "0.1.0"
@@ -29,6 +28,5 @@ __all__ = [
     "TaskConfig",
     "StepDatasetManager",
     "EvaluatorRegistry",
-    "YAMLExperimentRunner",
     "RunnableRegistry",
 ]

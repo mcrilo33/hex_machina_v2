@@ -61,6 +61,50 @@ class StepConfig(BaseModel):
                     multi_value_fields[field_name] = field_value
         return multi_value_fields
 
+    def resolve_prompt_config(self, prompt_registry) -> Dict[str, Any]:
+        """Resolve prompt configuration by loading template and input variables from registry.
+
+        Args:
+            prompt_registry: Registry to load prompt templates from
+
+        Returns:
+            Resolved config with template and input_variables instead of prompt_name
+        """
+        if not self.config or "prompt_name" not in self.config:
+            return self.config or {}
+
+        prompt_name = self.config["prompt_name"]
+        template_data = prompt_registry.get_template(prompt_name)
+
+        if not template_data:
+            raise ValueError(f"Prompt template '{prompt_name}' not found in registry")
+
+        # Create new config with resolved prompt data
+        resolved_config = self.config.copy()
+
+        # Add template if it exists in the prompt data
+        if "template" in template_data:
+            resolved_config["template"] = template_data["template"]
+
+        # Add input_variables if it exists in the prompt data, or extract from template
+        if "input_variables" in template_data:
+            resolved_config["input_variables"] = template_data["input_variables"]
+        elif "template" in template_data:
+            # Extract input variables from template placeholders like {variable_name}
+            import re
+
+            template = template_data["template"]
+            input_vars = re.findall(r"\{(\w+)\}", template)
+            if input_vars:
+                resolved_config["input_variables"] = list(
+                    set(input_vars)
+                )  # Remove duplicates
+
+        # Remove the prompt_name since we've resolved it
+        resolved_config.pop("prompt_name", None)
+
+        return resolved_config
+
 
 class TaskConfig(BaseModel):
     """Configuration for a complete task."""

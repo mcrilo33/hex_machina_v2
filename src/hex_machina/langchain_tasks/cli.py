@@ -24,8 +24,8 @@ except ImportError:
     # dotenv not available, continue without it
     pass
 
+from ..experiments import ExperimentYAMLRunner
 from .builder import TaskBuilder
-from .experiments.yaml_runner import YAMLExperimentRunner
 from .registry import RunnableRegistry
 
 
@@ -98,42 +98,35 @@ def run_task(config_path: Path, article_id: Optional[int] = None) -> None:
     """Run a single task from YAML configuration.
 
     Args:
-        config_path: Path to task YAML config
-        article_id: Optional article ID from database
+        config_path: Path to the YAML configuration file
+        article_id: Optional article ID to process
     """
-    logger = logging.getLogger("langchain_tasks.cli.run")
+    logger = logging.getLogger("langchain_tasks.cli")
 
     try:
-        # Validate config file
+        # Validate and load configuration
         config_path = validate_yaml_config(config_path)
-        logger.info(f"Running task from config: {config_path}")
-
-        # Load YAML config
         config_dict = load_yaml_config(config_path)
-        logger.info(f"Loaded configuration: {config_dict.get('name', 'unnamed')}")
 
-        # Initialize components - Registry will auto-discover custom runnables
+        logger.info(f"Running task from configuration: {config_path}")
+
+        # Build and run task
         registry = RunnableRegistry()
+        builder = TaskBuilder(registry=registry)
 
-        # Initialize dataset manager for step-level datasets
-        from .datasets.step_manager import StepDatasetManager
+        # Build the task
+        task = builder.invoke(config_dict)
+        logger.info(f"Task built successfully: {type(task).__name__}")
 
-        dataset_manager = StepDatasetManager()
-
-        task_builder = TaskBuilder(registry=registry, dataset_manager=dataset_manager)
-
-        # Build and execute task
-        task = task_builder.invoke(config_dict)
-
-        # Prepare inputs (runnables will handle input sourcing)
+        # Prepare inputs
         inputs = {}
         if article_id:
             inputs["article_id"] = article_id
-            logger.info(f"Using article ID: {article_id}")
+            logger.info(f"Processing article ID: {article_id}")
 
-        # Execute task with tracing
+        # Execute task
         logger.info("Executing task...")
-        result = task_builder.invoke_with_tracing(config_dict, inputs)
+        result = task.invoke(inputs)
 
         logger.info("Task completed successfully")
         logger.info(f"Result: {result}")
@@ -147,58 +140,35 @@ def run_experiment(config_path: Path, input_file: Optional[Path] = None) -> None
     """Run an experiment from YAML configuration.
 
     Args:
-        config_path: Path to experiment YAML config
+        config_path: Path to the YAML configuration file
         input_file: Optional JSON file with test inputs
     """
-    logger = logging.getLogger("langchain_tasks.cli.experiment")
+    logger = logging.getLogger("langchain_tasks.cli")
 
     try:
-        # Validate config file
+        # Validate and load configuration
         config_path = validate_yaml_config(config_path)
-        logger.info(f"Running experiment from config: {config_path}")
-
-        # Load YAML config
-        config_dict = load_yaml_config(config_path)
-        logger.info(
-            f"Loaded experiment configuration: {config_dict.get('name', 'unnamed')}"
-        )
-
-        # Initialize components - Registry will auto-discover custom runnables
-        registry = RunnableRegistry()
-        task_builder = TaskBuilder(registry=registry)
-
-        # Always use YAMLExperimentRunner for experiments
-        experiment_runner = YAMLExperimentRunner()
+        logger.info(f"Running experiment from configuration: {config_path}")
 
         # Load test inputs if provided
-        inputs = {}
         if input_file:
-            if not input_file.exists():
-                raise FileNotFoundError(f"Input file not found: {input_file}")
-            if not input_file.suffix.lower() == ".json":
-                raise ValueError(f"Input file must be JSON: {input_file}")
-
             import json
 
             with open(input_file, "r") as f:
                 inputs = json.load(f)
             logger.info(f"Loaded test inputs from: {input_file}")
 
-        # Instantiate the proper configuration model
-        from .config.models import ExperimentConfig
+        # Use our new ExperimentYAMLRunner
+        experiment_runner = ExperimentYAMLRunner()
 
-        experiment_config = ExperimentConfig(**config_dict)
-
-        # Execute experiment
+        # Execute experiment using the new runner
         logger.info("Executing experiment...")
-        # YAMLExperimentRunner is async, use sync wrapper
-        result = experiment_runner.run_sync(
-            experiment_runner.run_experiments_from_config(experiment_config)
-        )
+        result = experiment_runner.run_experiment_from_yaml_sync(config_path)
 
         logger.info("Experiment completed successfully")
-        logger.info(f"Total variations: {result.get('total_variations', 'unknown')}")
-        logger.info(f"Datasets created: {len(result.get('datasets_created', []))}")
+        logger.info(f"Target dataset: {result.get('target_dataset', 'unknown')}")
+        logger.info(f"Task variations: {len(result.get('task_variations', []))}")
+        logger.info(f"Evaluation results: {len(result.get('evaluation_results', []))}")
 
     except Exception as e:
         logger.error(f"Experiment execution failed: {e}")
@@ -222,10 +192,10 @@ Examples:
   langchain_tasks run -c configs/enrichment/tasks/content_completeness.yaml --article-id 123
 
   # Run an experiment
-  langchain_tasks experiment -c configs/ingestion/experiments/content_completeness_optimization.yaml
+  langchain_tasks experiment -c configs/experiments/example_experiment.yaml
 
   # Run an experiment with test inputs
-  langchain_tasks experiment -c configs/ingestion/experiments/content_completeness_optimization.yaml --input-file test_inputs.json
+  langchain_tasks experiment -c configs/experiments/example_experiment.yaml --input-file test_inputs.json
         """,
     )
 
