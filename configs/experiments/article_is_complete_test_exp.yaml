@@ -32,6 +32,11 @@ evaluators:
     description: "Validate if the LLM output matches the expected JSON schema for article completeness"
     config: {}
 
+  - name: llm_output_equality_validation
+    type: "llm_output_equality_evaluator"
+    description: "Check if the LLM output exactly matches expected reference JSON responses"
+    config: {}
+
 metadata:
   category: "example"
   tags:
