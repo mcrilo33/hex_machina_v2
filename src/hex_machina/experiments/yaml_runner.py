@@ -11,6 +11,15 @@ from typing import Any, Dict, Union
 
 import yaml
 
+# Load environment variables from .env files
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:
+    # dotenv not available, continue without it
+    pass
+
 from .config_models import ExperimentConfig
 from .runner import ExperimentRunner
 
