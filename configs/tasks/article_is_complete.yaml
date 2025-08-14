@@ -23,7 +23,7 @@ steps:
       max_tokens: 4000
       base_url: "https://openrouter.ai/api/v1"
       api_key: "${OPENROUTER_API_KEY}"
-    dataset: false
+    dataset: true
 
 metadata:
   category: "article_is_complete"

@@ -276,7 +276,7 @@ class DatasetGenerator:
         small_split_threshold = 3
         example_count = self._example_counts.get(dataset_name, 0)
 
-        if example_count > small_split_threshold:
+        if example_count >= small_split_threshold:
             try:
                 # Get the first 3 examples for the split
                 examples = self.client.list_examples(
@@ -287,6 +287,7 @@ class DatasetGenerator:
                 examples_list = list(examples)
 
                 # Get the first N examples for the split
+                small_split_threshold -= 1
                 split_examples = examples_list[:small_split_threshold]
 
                 self.client.update_dataset_splits(
