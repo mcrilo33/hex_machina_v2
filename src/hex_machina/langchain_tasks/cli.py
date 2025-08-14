@@ -24,7 +24,6 @@ except ImportError:
     # dotenv not available, continue without it
     pass
 
-from ..experiments import ExperimentYAMLRunner
 from .builder import TaskBuilder
 from .registry import RunnableRegistry
 
@@ -166,6 +165,8 @@ def run_experiment(config_path: Path, input_file: Optional[Path] = None) -> None
             logger.info(f"Loaded test inputs from: {input_file}")
 
         # Use our new ExperimentYAMLRunner
+        from ..experiments import ExperimentYAMLRunner
+
         experiment_runner = ExperimentYAMLRunner()
 
         # Execute experiment using the new runner

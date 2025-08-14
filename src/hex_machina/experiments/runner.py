@@ -40,7 +40,7 @@ class ExperimentRunner:
 
         try:
             # 1. Load existing target dataset
-            target_dataset = await self._load_existing_dataset(config.target_dataset)
+            target_dataset = await self._load_existing_dataset(config)
 
             # 2. Generate multiple TaskConfigs from the main TaskConfig
             task_variations = self._generate_task_variations(config.task)
@@ -172,23 +172,46 @@ class ExperimentRunner:
         )
         return step_task
 
-    async def _load_existing_dataset(self, dataset_name: str) -> str:
+    async def _load_existing_dataset(self, config: ExperimentConfig) -> Any:
         """Load existing dataset from LangSmith.
 
         Args:
-            dataset_name: Name of the dataset to load
+            config: Experiment configuration containing dataset and split information
 
         Returns:
-            Dataset identifier for evaluation
+            Dataset data for evaluation (either dataset name or filtered examples)
         """
         try:
-            # For now, return the dataset name as the identifier
-            # This will be used by LangSmith to find the dataset
+            dataset_name = config.target_dataset
             self._logger.info(f"Loading dataset: {dataset_name}")
-            return dataset_name
+
+            # If splits are specified, load examples with those splits
+            if config.split:
+                splits = (
+                    [config.split] if isinstance(config.split, str) else config.split
+                )
+                self._logger.info(f"Loading examples from splits: {splits}")
+
+                # Use list_examples to get examples from specific splits
+                examples = self.client.list_examples(
+                    dataset_name=dataset_name, splits=splits
+                )
+
+                # Convert generator to list for evaluation
+                examples_list = list(examples)
+                self._logger.info(
+                    f"Loaded {len(examples_list)} examples from splits: {splits}"
+                )
+                return examples_list
+            else:
+                # Return dataset name for backward compatibility
+                self._logger.info(
+                    f"No splits specified, using entire dataset: {dataset_name}"
+                )
+                return dataset_name
 
         except Exception as e:
-            self._logger.error(f"Failed to load dataset {dataset_name}: {e}")
+            self._logger.error(f"Failed to load dataset {config.target_dataset}: {e}")
             raise
 
     def _create_evaluator_from_config(self, evaluator_config):

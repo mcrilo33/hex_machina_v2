@@ -2,7 +2,11 @@ name: example_experiment
 description: "Example experiment configuration for CLI demonstration"
 
 # Single target dataset - inputs from first step, outputs from last step
-target_dataset: "ExampleTask_llm_keywords_20250814_145420"
+target_dataset: "ExampleTask_llm_keywords_20250814_170051"
+
+# Specify which dataset splits to use for evaluation
+# Can be a single split name or list of splits
+split: ["small"]
 
 # Task specification directly in experiment
 task:
