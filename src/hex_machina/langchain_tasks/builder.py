@@ -14,6 +14,7 @@ from langchain_core.runnables import Runnable, RunnableSequence
 from pydantic import BaseModel, Field
 
 from .datasets import StepDataset, StepDatasetManager
+from .prompts.registry import PromptRegistry
 from .registry import RunnableRegistry
 
 
@@ -38,6 +39,50 @@ class StepConfig(BaseModel):
     dataset: Optional[bool] = Field(
         default=False, description="Whether to create a dataset for this step"
     )
+
+    def resolve_prompt_config(self, prompt_registry: PromptRegistry) -> Dict[str, Any]:
+        """Resolve prompt configuration by loading template and input variables from registry.
+
+        Args:
+            prompt_registry: Registry to load prompt templates from
+
+        Returns:
+            Resolved config with template and input_variables instead of prompt_name
+        """
+        if not self.config or "prompt_name" not in self.config:
+            return self.config or {}
+
+        prompt_name = self.config["prompt_name"]
+        template_data = prompt_registry.get_template(prompt_name)
+
+        if not template_data:
+            raise ValueError(f"Prompt template '{prompt_name}' not found in registry")
+
+        # Create new config with resolved prompt data
+        resolved_config = self.config.copy()
+
+        # Add template if it exists in the prompt data
+        if "template" in template_data:
+            resolved_config["template"] = template_data["template"]
+
+        # Add input_variables if it exists in the prompt data, or extract from template
+        if "input_variables" in template_data:
+            resolved_config["input_variables"] = template_data["input_variables"]
+        elif "template" in template_data:
+            # Extract input variables from template placeholders like {variable_name}
+            import re
+
+            template = template_data["template"]
+            input_vars = re.findall(r"\{(\w+)\}", template)
+            if input_vars:
+                resolved_config["input_variables"] = list(
+                    set(input_vars)
+                )  # Remove duplicates
+
+        # Remove the prompt_name since we've resolved it
+        resolved_config.pop("prompt_name", None)
+
+        return resolved_config
 
 
 class TaskConfig(BaseModel):
@@ -86,12 +131,16 @@ class ArticleFetcherTaskStrategy(TaskStrategy):
         # First step: ArticleFetcher
         article_fetcher = runnables[0]
 
-        # Middle steps: enrichment processors
-        enrichment_steps = runnables[1:-1]
-        enrichment_step_names = [step.name for step in config.steps[1:-1]]
+        # Check if the last step is EnrichmentSaver
+        is_enrichment_saver = config.steps[-1].runnable == "EnrichmentSaver"
 
-        # Last step: EnrichmentSaver
-        enrichment_saver = runnables[-1]
+        # Middle steps: enrichment processors
+        if is_enrichment_saver:
+            enrichment_steps = runnables[1:-1]
+            enrichment_step_names = [step.name for step in config.steps[1:-1]]
+        else:
+            enrichment_steps = runnables[1:]
+            enrichment_step_names = [step.name for step in config.steps[1:]]
 
         # Map phase: process each article through enrichment steps
         def process_article_through_enrichment_steps(article):
@@ -165,12 +214,19 @@ class ArticleFetcherTaskStrategy(TaskStrategy):
                     "enriched_articles": enriched_articles,
                 }
 
-        # Create the map-reduce pipeline
+        # Create the map pipeline
         enrichment_processor = RunnableLambda(process_article_through_enrichment_steps)
-        batch_saver = RunnableLambda(save_all_enrichments_in_batch)
 
-        # Chain: ArticleFetcher -> Map(Enrichment) -> Reduce(Batch Save)
-        return article_fetcher | enrichment_processor.map() | batch_saver
+        if is_enrichment_saver:
+            # Last step is EnrichmentSaver - use batch save logic
+            enrichment_saver = runnables[-1]
+            batch_saver = RunnableLambda(save_all_enrichments_in_batch)
+            # Chain: ArticleFetcher -> Map(Enrichment) -> Reduce(Batch Save)
+            return article_fetcher | enrichment_processor.map() | batch_saver
+        else:
+            # Last step is not EnrichmentSaver - just process and return results
+            # Chain: ArticleFetcher -> Map(Enrichment) -> Last Step
+            return article_fetcher | enrichment_processor.map()
 
 
 class TaskStrategyFactory:
@@ -182,7 +238,6 @@ class TaskStrategyFactory:
             config.steps
             and config.steps[0].runnable == "ArticleFetcher"
             and len(config.steps) > 1
-            and config.steps[-1].runnable == "EnrichmentSaver"
         ):
             return ArticleFetcherTaskStrategy()
         return StandardTaskStrategy()
@@ -207,15 +262,18 @@ class TaskBuilder(Runnable):
         self,
         registry: Optional[RunnableRegistry] = None,
         dataset_manager: Optional[StepDatasetManager] = None,
+        prompt_registry: Optional[PromptRegistry] = None,
     ):
         """Initialize the task builder.
 
         Args:
             registry: Runnable registry for discovering runnables
             dataset_manager: Optional dataset manager for step-level datasets
+            prompt_registry: Registry for loading prompt templates
         """
         self.registry = registry or RunnableRegistry()
         self.dataset_manager = dataset_manager
+        self.prompt_registry = prompt_registry or PromptRegistry()
         self.strategy_factory = TaskStrategyFactory()
         self._logger = logging.getLogger("langchain_tasks.builder")
 
@@ -281,10 +339,13 @@ class TaskBuilder(Runnable):
     def _build_step_runnable(self, step_config: StepConfig) -> Runnable:
         """Build a single step runnable."""
         try:
+            # Resolve prompt configuration if needed
+            resolved_config = step_config.resolve_prompt_config(self.prompt_registry)
+
             # Use the registry's invoke method with proper input format
             input_data = {
                 "runnable_name": step_config.runnable,
-                "config": step_config.config or {},
+                "config": resolved_config,
             }
             runnable = self.registry.invoke(input_data)
 
