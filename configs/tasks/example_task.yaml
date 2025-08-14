@@ -7,13 +7,11 @@ steps:
       db_path: "storage/articles14.db"
       filters:
         limit: 5
-    dataset: false
 
   - name: prompt_template
     runnable: PromptTemplate
     config:
       template: "Extract keywords from the following text: {text_content}"
-    dataset: true
 
   - name: llm_processor
     runnable: ChatOpenAI
@@ -21,7 +19,6 @@ steps:
       model: "gpt-3.5-turbo"
       temperature: 0.0
       max_tokens: 4000
-    dataset: true
 
   - name: save_keywords_enrichment
     runnable: EnrichmentSaver
@@ -29,7 +26,13 @@ steps:
       db_path: "storage/articles14.db"
       enrichment_type: "keywords"
       input_mapping: "llm_processor.content"
-    dataset: false
+datasets:
+  - name: "llm_keywords"
+    description: "Dataset for evaluating the keyword extraction pipeline"
+    input_step: "prompt_template"
+    output_step: "llm_processor"
+    input_mapping: "prompt_template.messages"
+    output_mapping: "llm_processor.content"
 
 metadata:
   category: "example"

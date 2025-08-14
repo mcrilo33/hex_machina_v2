@@ -7,11 +7,11 @@ for individual steps with automatic split creation.
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from langsmith import Client, schemas
 
-from .models import StepDataset
+from .models import DatasetDefinition, StepDataset
 
 
 class DatasetGenerator:
@@ -262,6 +262,128 @@ class DatasetGenerator:
         except Exception as e:
             self._logger.warning(
                 f"Failed to add example to dataset {dataset.name}: {e}"
+            )
+            return None
+
+    def create_step_range_dataset(
+        self,
+        task_name: str,
+        dataset_def: "DatasetDefinition",
+        run_id: str,
+    ) -> Optional[schemas.Dataset]:
+        """Create a dataset that spans multiple steps."""
+        if not dataset_def.enabled:
+            return None
+
+        # Generate dataset name
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        dataset_name = f"{task_name}_{dataset_def.name}_{timestamp}"
+
+        # Check if we already have this dataset
+        if dataset_name in self._dataset_cache:
+            return self._dataset_cache[dataset_name]
+
+        try:
+            # Create the dataset
+            description = (
+                dataset_def.description
+                or f"Dataset for {dataset_def.input_step} -> {dataset_def.output_step} pipeline"
+            )
+
+            dataset = self.client.create_dataset(
+                dataset_name=dataset_name,
+                description=description,
+                data_type=schemas.DataType.kv,
+            )
+
+            # Cache the dataset and initialize example count
+            self._dataset_cache[dataset_name] = dataset
+            self._example_counts[dataset_name] = 0
+
+            self._logger.info(
+                f"Created step-range dataset: {dataset_name} (ID: {dataset.id})"
+            )
+            return dataset
+
+        except Exception as e:
+            self._logger.warning(
+                f"Failed to create step-range dataset {dataset_name}: {e}"
+            )
+            return None
+
+    def bulk_add_step_range_examples(
+        self,
+        dataset: schemas.Dataset,
+        examples_data: List[Dict[str, Any]],
+        run_id: str,
+        dataset_def: "DatasetDefinition",
+        task_name: str,
+    ) -> Optional[List[schemas.Example]]:
+        """Bulk add examples to a step-range dataset using create_examples.
+
+        Args:
+            dataset: The dataset to add examples to
+            examples_data: List of dicts with 'inputs' and 'outputs' keys
+            run_id: Task run identifier
+            dataset_def: Dataset definition
+            task_name: Name of the task
+
+        Returns:
+            List of created examples if successful, None otherwise
+        """
+        if not examples_data:
+            return []
+
+        try:
+            # Prepare metadata for all examples
+            base_metadata = {
+                "run_id": run_id,
+                "task_name": task_name,
+                "input_step": dataset_def.input_step,
+                "output_step": dataset_def.output_step,
+                "dataset_name": dataset_def.name,
+                "timestamp": datetime.now().isoformat(),
+                "example_type": "step_range_execution",
+            }
+
+            # Prepare examples for bulk creation
+            examples_to_create = []
+            for i, example_data in enumerate(examples_data):
+                example_metadata = base_metadata.copy()
+                example_metadata["example_index"] = i
+
+                examples_to_create.append(
+                    {
+                        "inputs": example_data["inputs"],
+                        "outputs": example_data["outputs"],
+                        "metadata": example_metadata,
+                    }
+                )
+
+            # Bulk create all examples at once using dataset_id parameter
+            created_examples = self.client.create_examples(
+                dataset_id=dataset.id,
+                examples=examples_to_create,
+            )
+
+            # Update example count
+            dataset_name = dataset.name
+            self._example_counts[dataset_name] = self._example_counts.get(
+                dataset_name, 0
+            ) + len(created_examples)
+
+            self._logger.info(
+                f"Bulk added {len(created_examples)} examples to step-range dataset {dataset_name}"
+            )
+
+            # Check if we should create a split
+            self._maybe_create_split(dataset, dataset_name)
+
+            return created_examples
+
+        except Exception as e:
+            self._logger.warning(
+                f"Failed to bulk add examples to step-range dataset {dataset.name}: {e}"
             )
             return None
 
