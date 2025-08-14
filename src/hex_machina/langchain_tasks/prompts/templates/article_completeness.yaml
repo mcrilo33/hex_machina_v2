@@ -9,10 +9,12 @@ template: |
 
   # CONTEXT
   Articles are automatically retrieved from HTML pages, which can introduce various issues like content truncation, missing sections, paywall restrictions, or technical problems that make the content incomplete or unusable.
+  
 
   # INPUTS
+  # The text content is provided between <START_OF_INPUT> and <END_OF_INPUT> tags.
   TITLE: {title}
-  CONTENT: {text_content}
+  CONTENT : <START_OF_INPUT> {text_content} <END_OF_INPUT>
 
   # INSTRUCTIONS
   1. Analyze the article title and content for completeness
@@ -33,20 +35,11 @@ template: |
     "is_complete": true/false,
     "reasons": [
       // Use only these predefined reasons:
-      // - "content_truncated" (if article ends abruptly)
-      // - "missing_sections" (if key sections are missing)
-      // - "malformed_html" (if HTML issues affect content)
+      // - "content_truncated" (if article's content is largely truncated)
       // - "paywall_content" (if content is subscription-locked)
-      // - "loading_incomplete" (if dynamic content not loaded)
-      // - "ad_spam_content" (if mostly advertisements)
       // - "error_page" (if server errors or 404)
       // - "minimal_content" (if too short to be meaningful)
-      // - "broken_media" (if images/videos missing)
-      // - "duplicate_content" (if duplicate or redirect)
-      // - "no_issues" (if article is complete)
-    ],
-    "confidence": 0.0-1.0,
-    "explanation": "Brief explanation of your assessment"
+    ]
   }}
 
   # START
