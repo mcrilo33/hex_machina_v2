@@ -61,6 +61,7 @@ class EvaluatorRegistry:
         """Discover available LangChain evaluators."""
         langchain_modules = [
             "langchain.evaluation.parsing.base",
+            "langchain.evaluation.parsing.json_schema",
             "langchain.evaluation.criteria",
             "langchain.evaluation.qa",
             "langchain.evaluation.rag",
@@ -151,6 +152,17 @@ class EvaluatorRegistry:
         if name in self._custom_evaluators:
             return self._custom_evaluators[name]
 
+        # Check LangChain evaluators
+        if name in self._langchain_evaluators:
+            evaluator_class = self._langchain_evaluators[name]
+            try:
+                return evaluator_class(**kwargs)
+            except Exception as e:
+                self._logger.error(
+                    f"Failed to instantiate LangChain evaluator {name}: {e}"
+                )
+                raise ValueError(f"Failed to instantiate evaluator {name}: {e}")
+
         # Check built-in evaluators
         if name in self._builtin_evaluators:
             evaluator_class = self._builtin_evaluators[name]
@@ -184,7 +196,7 @@ class EvaluatorRegistry:
                 )
 
         raise ValueError(
-            f"Evaluator '{name}' not found. Available: {list(self._builtin_evaluators.keys()) + list(self._custom_evaluators.keys())}"
+            f"Evaluator '{name}' not found. Available: {list(self._langchain_evaluators.keys()) + list(self._builtin_evaluators.keys()) + list(self._custom_evaluators.keys())}"
         )
 
     def list_evaluators(self) -> Dict[str, List[str]]:
@@ -249,9 +261,9 @@ class EvaluatorRegistry:
     def _auto_discover_custom_evaluators(self):
         """Auto-discover custom evaluators from the custom_evaluators package."""
         try:
-            # Import the custom evaluators package using relative import
+            # Import the custom evaluators package using the correct import path
             custom_package = importlib.import_module(
-                ".custom_evaluators", package="langchain_tasks.evaluation"
+                "src.hex_machina.langchain_tasks.evaluation.custom_evaluators"
             )
 
             # Get the package path
@@ -263,9 +275,7 @@ class EvaluatorRegistry:
                     continue
 
                 # Import the module
-                module_name = (
-                    f"langchain_tasks.evaluation.custom_evaluators.{py_file.stem}"
-                )
+                module_name = f"src.hex_machina.langchain_tasks.evaluation.custom_evaluators.{py_file.stem}"
                 try:
                     module = importlib.import_module(module_name)
 

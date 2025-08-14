@@ -26,11 +26,13 @@ template: |
   # CONSTRAINTS
   - Use only the predefined reason codes provided
   - Return only valid JSON with no additional text
+  - NO markdown formatting, code blocks, or backticks
+  - NO explanatory text before or after the JSON
   - Base your assessment on the content provided, not external knowledge
   - Be objective and systematic in your evaluation
 
   # OUTPUTS
-  Return your assessment in this exact JSON format:
+  Return your assessment in this exact JSON format (no markdown, no code blocks):
   {{
     "is_complete": true/false,
     "reasons": [

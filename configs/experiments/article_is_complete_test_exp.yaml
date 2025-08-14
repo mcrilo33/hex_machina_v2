@@ -27,34 +27,10 @@ task:
 
 # All evaluators evaluate the complete task execution
 evaluators:
-  - name: criteria_accuracy
-    type: "criteria"
-    description: "Evaluate if the LLM output is accurate"
-    config:
-      criteria: ["accuracy"]
-      threshold: 0.8
-      model: "openai/gpt-4o-mini"
-      base_url: "https://openrouter.ai/api/v1"
-      api_key: "${OPENROUTER_API_KEY}"
-      temperature: 0.0
-
-  - name: content_completeness
-    type: "content_completeness"
-    description: "Evaluate if the extracted keywords are complete"
-    config:
-      model: "openai/gpt-4o-mini"
-      base_url: "https://openrouter.ai/api/v1"
-      api_key: "${OPENROUTER_API_KEY}"
-      temperature: 0.0
-
-  - name: keyword_quality
-    type: "keyword_extraction_quality"
-    description: "Evaluate the quality of extracted keywords"
-    config:
-      model: "anthropic/claude-3-5-sonnet"
-      base_url: "https://openrouter.ai/api/v1"
-      api_key: "${OPENROUTER_API_KEY}"
-      temperature: 0.1
+  - name: article_completeness_schema_validation
+    type: "article_completeness_schema_evaluator"
+    description: "Validate if the LLM output matches the expected JSON schema for article completeness"
+    config: {}
 
 metadata:
   category: "example"

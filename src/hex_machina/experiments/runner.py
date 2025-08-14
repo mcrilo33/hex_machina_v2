@@ -215,7 +215,7 @@ class ExperimentRunner:
             raise
 
     def _create_evaluator_from_config(self, evaluator_config):
-        """Create an evaluator function based on the config specification."""
+        """Create an evaluator using the EvaluatorRegistry."""
         try:
             evaluator_type = evaluator_config.type
             evaluator_name = evaluator_config.name
@@ -225,62 +225,35 @@ class ExperimentRunner:
                 f"Creating evaluator: {evaluator_name} of type: {evaluator_type}"
             )
 
-            if evaluator_type == "criteria":
-                # Criteria-based evaluator
-                criteria = config.get("criteria", ["accuracy"])
-                threshold = config.get("threshold", 0.8)
+            # Use the EvaluatorRegistry to get the evaluator
+            from ..langchain_tasks.evaluation.registry import evaluator_registry
 
-                def criteria_evaluator(run, example):
-                    # Simple criteria evaluation - in production this would use LLM
-                    return {
-                        "score": threshold,
-                        "criteria": criteria,
-                        "comment": f"Evaluated against criteria: {criteria}",
-                    }
-
-                return criteria_evaluator
-
-            elif evaluator_type == "content_completeness":
-                # Content completeness evaluator
-                def content_completeness_evaluator(run, example):
-                    # Evaluate if content is complete
-                    return {
-                        "score": 0.8,
-                        "metric": "content_completeness",
-                        "comment": "Content completeness evaluation",
-                    }
-
-                return content_completeness_evaluator
-
-            elif evaluator_type == "keyword_extraction_quality":
-                # Keyword extraction quality evaluator
-                def keyword_quality_evaluator(run, example):
-                    # Evaluate keyword extraction quality
-                    return {
-                        "score": 0.8,
-                        "metric": "keyword_quality",
-                        "comment": "Keyword extraction quality evaluation",
-                    }
-
-                return keyword_quality_evaluator
-
-            else:
+            try:
+                # Try to get evaluator by type first
+                evaluator = evaluator_registry.get_evaluator(evaluator_type, **config)
+                self._logger.info(f"Successfully created evaluator: {evaluator_type}")
+                return evaluator
+            except ValueError as type_error:
                 self._logger.warning(
-                    f"Unknown evaluator type: {evaluator_type}, using generic evaluator"
+                    f"Failed to create evaluator by type '{evaluator_type}': {type_error}"
                 )
-
-                # Generic evaluator for unknown types
-                def generic_evaluator(run, example):
-                    return {
-                        "score": 0.7,
-                        "metric": evaluator_type,
-                        "comment": f"Generic evaluation for {evaluator_type}",
-                    }
-
-                return generic_evaluator
+                # Fallback: try to get by name if type lookup fails
+                try:
+                    evaluator = evaluator_registry.get_evaluator(
+                        evaluator_name, **config
+                    )
+                    self._logger.info(
+                        f"Successfully created evaluator by name: {evaluator_name}"
+                    )
+                    return evaluator
+                except ValueError as name_error:
+                    # Fail fast - no generic fallback
+                    error_msg = f"Failed to create evaluator '{evaluator_name}' of type '{evaluator_type}'. Type lookup failed: {type_error}, Name lookup failed: {name_error}"
+                    self._logger.error(error_msg)
+                    raise ValueError(error_msg)
 
         except Exception as e:
             self._logger.error(
                 f"Failed to create evaluator {evaluator_config.name}: {e}"
             )
-            return None
+            raise
