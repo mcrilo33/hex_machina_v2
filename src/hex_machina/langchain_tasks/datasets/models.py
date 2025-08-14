@@ -32,10 +32,4 @@ class DatasetDefinition(BaseModel):
     description: Optional[str] = Field(default=None, description="Dataset description")
     input_step: str = Field(..., description="Step name that provides the input data")
     output_step: str = Field(..., description="Step name that provides the output data")
-    input_mapping: str = Field(
-        ..., description="Field path for input data (e.g., 'step_name.field')"
-    )
-    output_mapping: str = Field(
-        ..., description="Field path for output data (e.g., 'step_name.field')"
-    )
     enabled: bool = Field(default=True, description="Whether this dataset is enabled")
