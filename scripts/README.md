@@ -13,17 +13,41 @@ A utility script to clean up LangSmith datasets created after a specific date. U
 - Python 3.7+
 - Poetry for dependency management
 - `langsmith` package installed via Poetry
-- `LANGCHAIN_API_KEY` environment variable set
+- `python-dotenv` package for environment variable management
+- `LANGCHAIN_API_KEY` environment variable set (preferably via .env file)
 
 #### Installation
 
 ```bash
-# Install langsmith package using Poetry
-poetry add langsmith
+# Install required packages using Poetry
+poetry add langsmith python-dotenv
 
-# Set your LangSmith API key
+# Create a .env file in your project root
+echo 'LANGCHAIN_API_KEY=your-api-key-here' > .env
+
+# Or manually set the environment variable
 export LANGCHAIN_API_KEY='your-api-key-here'
 ```
+
+#### Environment Setup (Recommended)
+
+The script automatically loads environment variables from a `.env` file in your project root. This is the recommended approach for development:
+
+1. **Create a .env file** in your project root:
+   ```bash
+   echo 'LANGCHAIN_API_KEY=your-actual-api-key-here' > .env
+   ```
+
+2. **Add .env to .gitignore** (if not already there):
+   ```bash
+   echo '.env' >> .gitignore
+   ```
+
+3. **Never commit your .env file** - it contains sensitive information!
+
+4. **The script will automatically detect and load** the API key from the .env file.
+
+**Note**: The .env file approach is safer and more convenient than manually setting environment variables each time.
 
 #### Usage
 

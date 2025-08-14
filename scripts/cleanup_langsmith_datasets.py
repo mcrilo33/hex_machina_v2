@@ -20,6 +20,14 @@ from typing import List
 # Add the src directory to the path so we can import our modules
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    print("Warning: python-dotenv not found. Install it with: poetry add python-dotenv")
+    print("Continuing without .env file support...")
+
 try:
     from langsmith import Client
 except ImportError:
@@ -94,17 +102,18 @@ def get_datasets_after_date(client: Client, after_date: datetime) -> List[dict]:
 
 def delete_dataset(client: Client, dataset_id: str, dataset_name: str) -> bool:
     """Delete a specific dataset.
-
+    
     Args:
         client: LangSmith client
         dataset_id: ID of the dataset to delete
         dataset_name: Name of the dataset for logging
-
+        
     Returns:
         True if successful, False otherwise
     """
     try:
-        client.delete_dataset(dataset_id)
+        # Use dataset_id for deletion
+        client.delete_dataset(dataset_id=dataset_id)
         print(f"✅ Deleted dataset: {dataset_name} ({dataset_id})")
         return True
     except Exception as e:
@@ -211,8 +220,14 @@ Examples:
     # Check for LangSmith API key
     if not os.getenv("LANGCHAIN_API_KEY"):
         print("Error: LANGCHAIN_API_KEY environment variable not set.")
-        print("Please set your LangSmith API key:")
-        print("  export LANGCHAIN_API_KEY='your-api-key-here'")
+        print("\nTo fix this, you have several options:")
+        print("\n1. Create a .env file in your project root:")
+        print("   echo 'LANGCHAIN_API_KEY=your-api-key-here' > .env")
+        print("\n2. Set the environment variable manually:")
+        print("   export LANGCHAIN_API_KEY='your-api-key-here'")
+        print("\n3. Install python-dotenv if not already installed:")
+        print("   poetry add python-dotenv")
+        print("\nThe .env file approach is recommended for development.")
         sys.exit(1)
 
     # Initialize LangSmith client
