@@ -5,11 +5,11 @@ This registry manages both built-in LangSmith evaluators and custom evaluators,
 following LangSmith's evaluation philosophy.
 """
 
-import logging
 import importlib
 import inspect
+import logging
 from pathlib import Path
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Type
 
 # Import available evaluators from langchain
 try:
@@ -45,13 +45,44 @@ class EvaluatorRegistry:
         """Initialize the evaluator registry."""
         self._builtin_evaluators: Dict[str, Any] = {}
         self._custom_evaluators: Dict[str, Callable] = {}
+        self._langchain_evaluators: Dict[str, Type] = {}
         self._logger = logging.getLogger("langchain_tasks.evaluation.registry")
 
         # Register built-in evaluators
         self._register_builtin_evaluators()
-        
+
+        # Discover LangChain evaluators
+        self._discover_langchain_evaluators()
+
         # Auto-discover and register custom evaluators
         self._auto_discover_custom_evaluators()
+
+    def _discover_langchain_evaluators(self):
+        """Discover available LangChain evaluators."""
+        langchain_modules = [
+            "langchain.evaluation.parsing.base",
+            "langchain.evaluation.criteria",
+            "langchain.evaluation.qa",
+            "langchain.evaluation.rag",
+        ]
+
+        for module_name in langchain_modules:
+            try:
+                module = importlib.import_module(module_name)
+                for name, obj in inspect.getmembers(module):
+                    if (
+                        inspect.isclass(obj)
+                        and hasattr(obj, "evaluate_strings")
+                        and name.endswith("Evaluator")
+                    ):
+                        self._langchain_evaluators[name] = obj
+                        self._logger.info(f"Discovered LangChain evaluator: {name}")
+            except ImportError:
+                continue
+
+        self._logger.info(
+            f"Discovered {len(self._langchain_evaluators)} LangChain evaluators"
+        )
 
     def _register_builtin_evaluators(self):
         """Register built-in LangSmith evaluators."""
@@ -74,6 +105,24 @@ class EvaluatorRegistry:
 
         except Exception as e:
             self._logger.warning(f"Could not import some built-in evaluators: {e}")
+
+    def get_evaluator_class(self, name: str) -> Type:
+        """Get evaluator class by name from any source."""
+        # Check LangChain evaluators first
+        if name in self._langchain_evaluators:
+            return self._langchain_evaluators[name]
+
+        # Check built-in evaluators
+        if name in self._builtin_evaluators:
+            return self._builtin_evaluators[name]
+
+        # Check custom evaluators
+        if name in self._custom_evaluators:
+            return self._custom_evaluators[name]
+
+        raise ValueError(
+            f"Evaluator '{name}' not found. Available: {list(self._langchain_evaluators.keys()) + list(self._builtin_evaluators.keys()) + list(self._custom_evaluators.keys())}"
+        )
 
     def register_custom_evaluator(self, name: str, evaluator: Callable):
         """Register a custom evaluator function.
@@ -145,6 +194,7 @@ class EvaluatorRegistry:
             Dictionary with built-in and custom evaluators
         """
         return {
+            "langchain": list(self._langchain_evaluators.keys()),
             "builtin": list(self._builtin_evaluators.keys()),
             "custom": list(self._custom_evaluators.keys()),
         }
@@ -176,6 +226,15 @@ class EvaluatorRegistry:
                 "module": evaluator_class.__module__,
             }
 
+        if name in self._langchain_evaluators:
+            evaluator_class = self._langchain_evaluators[name]
+            return {
+                "type": "langchain",
+                "name": name,
+                "class": evaluator_class.__name__,
+                "module": evaluator_class.__module__,
+            }
+
         if name.startswith("criteria:"):
             criteria_name = name.split(":", 1)[1]
             return {
@@ -191,35 +250,47 @@ class EvaluatorRegistry:
         """Auto-discover custom evaluators from the custom_evaluators package."""
         try:
             # Import the custom evaluators package using relative import
-            custom_package = importlib.import_module(".custom_evaluators", package="langchain_tasks.evaluation")
-            
+            custom_package = importlib.import_module(
+                ".custom_evaluators", package="langchain_tasks.evaluation"
+            )
+
             # Get the package path
             package_path = Path(custom_package.__file__).parent
-            
+
             # Discover Python files in the package
             for py_file in package_path.glob("*.py"):
                 if py_file.name.startswith("__"):
                     continue
-                    
+
                 # Import the module
-                module_name = f"langchain_tasks.evaluation.custom_evaluators.{py_file.stem}"
+                module_name = (
+                    f"langchain_tasks.evaluation.custom_evaluators.{py_file.stem}"
+                )
                 try:
                     module = importlib.import_module(module_name)
-                    
+
                     # Look for evaluator functions in the module
                     for name, obj in inspect.getmembers(module):
                         if inspect.isfunction(obj) and hasattr(obj, "__name__"):
                             # Check if it's an evaluator function (takes run and example parameters)
                             sig = inspect.signature(obj)
                             params = list(sig.parameters.keys())
-                            
-                            if len(params) >= 2 and "run" in params and "example" in params:
+
+                            if (
+                                len(params) >= 2
+                                and "run" in params
+                                and "example" in params
+                            ):
                                 self._custom_evaluators[name] = obj
-                                self._logger.info(f"Auto-discovered custom evaluator: {name}")
-                                
+                                self._logger.info(
+                                    f"Auto-discovered custom evaluator: {name}"
+                                )
+
                 except Exception as e:
-                    self._logger.warning(f"Failed to import custom evaluator module {module_name}: {e}")
-                    
+                    self._logger.warning(
+                        f"Failed to import custom evaluator module {module_name}: {e}"
+                    )
+
         except Exception as e:
             self._logger.warning(f"Failed to auto-discover custom evaluators: {e}")
 

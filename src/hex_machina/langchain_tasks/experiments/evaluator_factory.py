@@ -6,8 +6,9 @@ that can be used with LangSmith's aevaluate.
 """
 
 import logging
-from typing import Any, Callable, Dict
+from typing import Callable
 
+from ..evaluation.registry import evaluator_registry
 from .config_models import EvaluatorConfig
 
 
@@ -19,328 +20,95 @@ class EvaluatorFactory:
         self._logger = logging.getLogger(
             "langchain_tasks.experiments.evaluator_factory"
         )
-        self._registered_evaluators: Dict[str, Callable] = {}
-        self._register_builtin_evaluators()
-
-    def _register_builtin_evaluators(self):
-        """Register built-in evaluator functions."""
-        self._registered_evaluators.update(
-            {
-                "helpfulness_scorer": self._create_helpfulness_scorer,
-                "conciseness_scorer": self._create_conciseness_scorer,
-                "relevance_scorer": self._create_relevance_scorer,
-                "length_scorer": self._create_length_scorer,
-                "content_scorer": self._create_content_scorer,
-            }
-        )
-        self._logger.info(
-            f"Registered {len(self._registered_evaluators)} built-in evaluators"
-        )
-
-    def register_evaluator(self, name: str, evaluator_func: Callable):
-        """Register a custom evaluator function."""
-        self._registered_evaluators[name] = evaluator_func
-        self._logger.info(f"Registered custom evaluator: {name}")
 
     def create_evaluator(self, config: EvaluatorConfig) -> Callable:
-        """Create an evaluator function from configuration."""
-        evaluator_name = config.name
+        """Create evaluator instance from configuration."""
+        try:
+            # Get evaluator class from registry
+            evaluator_class = evaluator_registry.get_evaluator_class(config.type)
 
-        if evaluator_name in self._registered_evaluators:
-            # Use registered evaluator
-            evaluator_func = self._registered_evaluators[evaluator_name]
-            return evaluator_func(config.parameters or {})
-        else:
-            # Try to create from type
-            return self._create_evaluator_by_type(config)
+            # Create instance with parameters
+            parameters = config.parameters or {}
+            evaluator_instance = evaluator_class(**parameters)
 
-    def _create_evaluator_by_type(self, config: EvaluatorConfig) -> Callable:
-        """Create evaluator based on type."""
-        evaluator_type = config.type
+            # Return wrapper that matches expected interface
+            return self._create_evaluator_wrapper(evaluator_instance, config)
 
-        if evaluator_type == "custom_function":
-            return self._create_custom_evaluator(config)
-        elif evaluator_type == "helpfulness":
-            return self._create_helpfulness_scorer(config.parameters or {})
-        elif evaluator_type == "conciseness":
-            return self._create_conciseness_scorer(config.parameters or {})
-        elif evaluator_type == "relevance":
-            return self._create_relevance_scorer(config.parameters or {})
-        elif evaluator_type == "criteria":
-            return self._create_criteria_evaluator(config)
-        else:
-            raise ValueError(f"Unknown evaluator type: {evaluator_type}")
+        except Exception as e:
+            raise ValueError(f"Failed to create evaluator '{config.type}': {e}")
 
-    def _create_custom_evaluator(self, config: EvaluatorConfig) -> Callable:
-        """Create a custom evaluator based on configuration."""
+    def _create_evaluator_wrapper(
+        self, evaluator_instance, config: EvaluatorConfig
+    ) -> Callable:
+        """Create wrapper that converts between interfaces."""
 
-        # This is a placeholder - in practice, you might load custom functions
-        # from modules or create them dynamically
-        def custom_evaluator(run, example):
-            return {
-                "score": 0.5,
-                "reasoning": f"Custom evaluator: {config.name}",
-                "criterion": config.name,
-                "type": "custom",
-            }
-
-        return custom_evaluator
-
-    def _create_helpfulness_scorer(self, params: Dict[str, Any]) -> Callable:
-        """Create a helpfulness scorer based on parameters."""
-        min_length = params.get("min_length_threshold", 50)
-        max_length = params.get("max_length_threshold", 200)
-        length_weight = params.get("length_weight", 0.7)
-        content_weight = params.get("content_weight", 0.3)
-        bonus_for_details = params.get("bonus_for_details", False)
-
-        def helpfulness_evaluator(run, example):
-            output = run.outputs.get("result", "")
-            if isinstance(output, str):
-                length = len(output)
-
-                # Length-based scoring
-                if length < min_length:
-                    length_score = 0.0
-                elif length > max_length:
-                    length_score = 0.5
-                else:
-                    length_score = 1.0
-
-                # Content-based scoring (simple heuristic)
-                content_score = 0.5
-                if bonus_for_details and length > min_length + 50:
-                    content_score = 0.8
-
-                # Combined score
-                final_score = (length_score * length_weight) + (
-                    content_score * content_weight
-                )
-
-                return {
-                    "score": min(1.0, final_score),
-                    "reasoning": f"Length: {length} chars (score: {length_score:.2f}), Content: {content_score:.2f}",
-                    "criterion": "helpfulness",
-                    "parameters": {
-                        "min_length": min_length,
-                        "max_length": max_length,
-                        "length_weight": length_weight,
-                        "content_weight": content_weight,
-                    },
-                }
-            else:
-                return {
-                    "score": 0.5,
-                    "reasoning": "Non-string output",
-                    "criterion": "helpfulness",
-                }
-
-        return helpfulness_evaluator
-
-    def _create_conciseness_scorer(self, params: Dict[str, Any]) -> Callable:
-        """Create a conciseness scorer based on parameters."""
-        optimal_length = params.get("optimal_length", 100)
-        length_tolerance = params.get("length_tolerance", 50)
-        max_score_length = params.get("max_score_length", 150)
-        penalty_for_verbosity = params.get("penalty_for_verbosity", False)
-
-        def conciseness_evaluator(run, example):
-            output = run.outputs.get("result", "")
-            if isinstance(output, str):
-                length = len(output)
-
-                # Calculate conciseness score
-                if length <= optimal_length:
-                    score = 1.0
-                elif length <= optimal_length + length_tolerance:
-                    score = 0.8
-                elif length <= max_score_length:
-                    score = 0.5
-                else:
-                    score = 0.2
-
-                # Apply penalty for verbosity
-                if penalty_for_verbosity and length > max_score_length:
-                    score *= 0.8
-
-                return {
-                    "score": max(0.0, score),
-                    "reasoning": f"Length: {length} chars, Optimal: {optimal_length}±{length_tolerance}",
-                    "criterion": "conciseness",
-                    "parameters": {
-                        "optimal_length": optimal_length,
-                        "length_tolerance": length_tolerance,
-                        "max_score_length": max_score_length,
-                    },
-                }
-            else:
-                return {
-                    "score": 0.5,
-                    "reasoning": "Non-string output",
-                    "criterion": "conciseness",
-                }
-
-        return conciseness_evaluator
-
-    def _create_criteria_evaluator(self, config: EvaluatorConfig) -> Callable:
-        """Create a criteria-based evaluator."""
-        criteria_list = (
-            config.parameters.get("criteria", []) if config.parameters else []
-        )
-        threshold = (
-            config.parameters.get("threshold", 0.8) if config.parameters else 0.8
-        )
-
-        def criteria_evaluator(run, example):
-            """Evaluate based on specified criteria."""
-            output = run.outputs.get("result", "")
-
-            # Simple criteria evaluation (placeholder implementation)
-            # In practice, this would use more sophisticated evaluation logic
-            scores = {}
-            total_score = 0.0
-
-            for criterion in criteria_list:
-                if criterion == "accuracy":
-                    # Placeholder accuracy scoring
-                    score = 0.8  # This would be calculated based on actual evaluation
-                elif criterion == "completeness":
-                    # Placeholder completeness scoring
-                    score = 0.7  # This would be calculated based on actual evaluation
-                elif criterion == "relevance":
-                    # Placeholder relevance scoring
-                    score = 0.9  # This would be calculated based on actual evaluation
-                else:
-                    # Default score for unknown criteria
-                    score = 0.5
-
-                scores[criterion] = score
-                total_score += score
-
-            # Calculate average score
-            avg_score = total_score / len(criteria_list) if criteria_list else 0.5
-
-            # Determine if threshold is met
-            threshold_met = avg_score >= threshold
-
-            return {
-                "score": avg_score,
-                "threshold_met": threshold_met,
-                "threshold": threshold,
-                "criteria_scores": scores,
-                "reasoning": f"Evaluated {len(criteria_list)} criteria: {criteria_list}. Average score: {avg_score:.2f}, Threshold: {threshold:.2f}",
-                "criterion": "criteria_evaluation",
-                "evaluator_name": config.name,
-            }
-
-        return criteria_evaluator
-
-    def _create_relevance_scorer(self, params: Dict[str, Any]) -> Callable:
-        """Create a relevance scorer based on parameters."""
-        context_keywords = params.get("context_keywords", [])
-        keyword_weight = params.get("keyword_weight", 0.8)
-        context_weight = params.get("context_weight", 0.2)
-
-        def relevance_evaluator(run, example):
-            output = run.outputs.get("result", "")
+        def evaluator_wrapper(run, example):
+            # Extract data from run/example
+            prediction = run.outputs.get("result", "")
+            reference = (
+                example.outputs.get("reference", "") if example.outputs else None
+            )
             input_data = run.inputs
 
-            if isinstance(output, str) and input_data:
-                # Check if output contains input context
-                output_lower = output.lower()
-                input_lower = str(input_data).lower()
+            # Handle empty or invalid inputs for JSON evaluators
+            if config.type == "JsonEqualityEvaluator":
+                # Ensure prediction is valid JSON
+                if not prediction or not prediction.strip():
+                    return {
+                        "score": False,
+                        "reasoning": "Empty prediction - cannot evaluate JSON equality",
+                        "error": "Empty prediction string",
+                    }
 
-                # Keyword matching
-                keyword_score = 0.0
-                for keyword in context_keywords:
-                    if keyword.lower() in output_lower:
-                        keyword_score += 1.0
+                # Ensure reference is valid JSON if provided
+                if reference and not reference.strip():
+                    reference = None
 
-                if context_keywords:
-                    keyword_score /= len(context_keywords)
+                # Try to validate JSON format
+                try:
+                    import json
 
-                # Context relevance
-                context_score = 0.5
-                if any(keyword.lower() in input_lower for keyword in context_keywords):
-                    context_score = 0.8
+                    json.loads(prediction)
+                    if reference:
+                        json.loads(reference)
+                except json.JSONDecodeError as e:
+                    return {
+                        "score": False,
+                        "reasoning": f"Invalid JSON format: {str(e)}",
+                        "error": f"JSON decode error: {str(e)}",
+                    }
 
-                # Combined score
-                final_score = (keyword_score * keyword_weight) + (
-                    context_score * context_weight
+            # Call the evaluator
+            if hasattr(evaluator_instance, "evaluate_strings"):
+                try:
+                    result = evaluator_instance.evaluate_strings(
+                        prediction=prediction, reference=reference, input=input_data
+                    )
+                except Exception as e:
+                    return {
+                        "score": False,
+                        "reasoning": f"Evaluation failed: {str(e)}",
+                        "error": str(e),
+                    }
+            elif hasattr(evaluator_instance, "evaluate"):
+                try:
+                    result = evaluator_instance.evaluate(
+                        prediction=prediction, reference=reference, input=input_data
+                    )
+                except Exception as e:
+                    return {
+                        "score": False,
+                        "reasoning": f"Evaluation failed: {str(e)}",
+                        "error": str(e),
+                    }
+            else:
+                raise ValueError(
+                    f"Evaluator {config.type} has no known evaluation method"
                 )
 
-                return {
-                    "score": min(1.0, final_score),
-                    "reasoning": f"Keywords: {keyword_score:.2f}, Context: {context_score:.2f}",
-                    "criterion": "relevance",
-                    "parameters": {
-                        "context_keywords": context_keywords,
-                        "keyword_weight": keyword_weight,
-                        "context_weight": context_weight,
-                    },
-                }
-            else:
-                return {
-                    "score": 0.5,
-                    "reasoning": "Missing output or input data",
-                    "criterion": "relevance",
-                }
+            return result
 
-        return relevance_evaluator
-
-    def _create_length_scorer(self, params: Dict[str, Any]) -> Callable:
-        """Create a simple length-based scorer."""
-
-        def length_evaluator(run, example):
-            output = run.outputs.get("result", "")
-            if isinstance(output, str):
-                length = len(output)
-                score = min(1.0, length / 100.0)
-
-                return {
-                    "score": score,
-                    "reasoning": f"Length: {length} characters",
-                    "criterion": "length",
-                }
-            else:
-                return {
-                    "score": 0.5,
-                    "reasoning": "Non-string output",
-                    "criterion": "length",
-                }
-
-        return length_evaluator
-
-    def _create_content_scorer(self, params: Dict[str, Any]) -> Callable:
-        """Create a content-based scorer."""
-
-        def content_evaluator(run, example):
-            output = run.outputs.get("result", "")
-            if isinstance(output, str):
-                # Simple content scoring based on variety
-                words = output.split()
-                unique_words = len(set(words))
-                total_words = len(words)
-
-                if total_words > 0:
-                    diversity = unique_words / total_words
-                    score = min(1.0, diversity * 2)  # Scale to 0-1
-                else:
-                    score = 0.0
-
-                return {
-                    "score": score,
-                    "reasoning": f"Word diversity: {diversity:.2f} ({unique_words}/{total_words})",
-                    "criterion": "content_quality",
-                }
-            else:
-                return {
-                    "score": 0.5,
-                    "reasoning": "Non-string output",
-                    "criterion": "content_quality",
-                }
-
-        return content_evaluator
+        return evaluator_wrapper
 
 
 # Global factory instance
