@@ -6,32 +6,26 @@ steps:
     config:
       db_path: "storage/articles14.db"
       filters:
-        limit: 1
+        limit: 5
     dataset: false
 
   - name: prompt_template
     runnable: PromptTemplate
     config:
       prompt_name: "article_completeness"
-    dataset: true
+    dataset: false
 
   - name: llm_processor
     runnable: ChatOpenAI
     config:
-      model: "gpt-3.5-turbo"
+      model: "google/gemini-2.5-flash"
       temperature: 0.0
       max_tokens: 4000
-    dataset: true
-
-  - name: save_keywords_enrichment
-    runnable: EnrichmentSaver
-    config:
-      db_path: "storage/articles14.db"
-      enrichment_type: "keywords"
-      input_mapping: "llm_processor.content"
+      base_url: "https://openrouter.ai/api/v1"
+      api_key: "${OPENROUTER_API_KEY}"
     dataset: false
 
 metadata:
-  category: "example"
+  category: "article_is_complete"
   tags:
-    - "example_task"
+    - "article_is_complete"
