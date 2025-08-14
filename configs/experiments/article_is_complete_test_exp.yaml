@@ -1,43 +1,56 @@
 name: ArticleIsCompleteTestExp
 description: "Article is complete test experiment"
 
+target_dataset: "ArticleIsCompleteTask_article_completeness_20250814_171430"
+
+# Specify which dataset splits to use for evaluation
+# Can be a single split name or list of splits
+split: ["small"]
+
+# Task specification directly in experiment
 task:
   name: "ArticleIsCompleteTask"
   steps:
-    - name: fetch_articles
-      runnable: ArticleFetcher
-      config:
-        db_path: "storage/articles14.db"
-        filters:
-          limit: 5
-      dataset: false
-
     - name: prompt_template
       runnable: PromptTemplate
       config:
         prompt_name: "article_completeness"
-      dataset: false
 
     - name: llm_processor
       runnable: ChatOpenAI
       config:
-        model: ["deepseek/deepseek-chat-v3-0324:free"]
+        model: "google/gemini-2.5-flash"
         temperature: 0.0
         max_tokens: 4000
         base_url: "https://openrouter.ai/api/v1"
         api_key: "${OPENROUTER_API_KEY}"
-      dataset: false
 
-evaluations:
-  steps:
-    llm_processor:
-      evaluators:
-        - name: json_equality
-          type: "JsonEqualityEvaluator"
-          description: "Evaluate if the LLM output matches expected JSON structure"
-      target_datasets: ["ArticleIsCompleteTask_llm_processor_20250814_103511"]
+# All evaluators evaluate the complete task execution
+evaluators:
+  - name: criteria_accuracy
+    type: "criteria"
+    description: "Evaluate if the LLM output is accurate"
+    config:
+      criteria: ["accuracy"]
+      threshold: 0.8
+      model: "gpt-4o-mini"
+      temperature: 0.0
+
+  - name: content_completeness
+    type: "content_completeness"
+    description: "Evaluate if the extracted keywords are complete"
+    config:
+      model: "gpt-4o-mini"
+      temperature: 0.0
+
+  - name: keyword_quality
+    type: "keyword_extraction_quality"
+    description: "Evaluate the quality of extracted keywords"
+    config:
+      model: "anthropic/claude-3-5-sonnet"
+      temperature: 0.1
 
 metadata:
-  category: "article_is_complete"
+  category: "example"
   tags:
-    - "article_is_complete_test_exp"
+    - "example_experiment"

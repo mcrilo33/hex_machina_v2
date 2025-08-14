@@ -50,8 +50,11 @@ class ExperimentYAMLRunner:
 
             self._logger.info(f"Loaded experiment config from: {config_path}")
 
+            # Resolve environment variables in config values (same as CLI)
+            resolved_yaml_data = self._resolve_env_vars(yaml_data)
+
             # Validate and create ExperimentConfig
-            config = ExperimentConfig(**yaml_data)
+            config = ExperimentConfig(**resolved_yaml_data)
 
             self._logger.info(f"Experiment config validated: {config.name}")
             return config
@@ -60,6 +63,20 @@ class ExperimentYAMLRunner:
             raise yaml.YAMLError(f"Invalid YAML in {config_path}: {e}")
         except Exception as e:
             raise ValueError(f"Invalid experiment configuration in {config_path}: {e}")
+
+    def _resolve_env_vars(self, obj):
+        """Recursively resolve environment variables in config values (same as CLI)."""
+        import os
+
+        if isinstance(obj, dict):
+            return {k: self._resolve_env_vars(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self._resolve_env_vars(item) for item in obj]
+        elif isinstance(obj, str) and obj.startswith("${") and obj.endswith("}"):
+            env_var = obj[2:-1]  # Remove ${ and }
+            return os.getenv(env_var, obj)  # Return original if env var not found
+        else:
+            return obj
 
     async def run_experiment_from_yaml(
         self, config_path: Union[str, Path]
