@@ -112,7 +112,13 @@ def run_task(config_path: Path, article_id: Optional[int] = None) -> None:
 
         # Build and run task
         registry = RunnableRegistry()
-        builder = TaskBuilder(registry=registry)
+
+        # Create dataset manager to enable dataset creation
+        from .datasets.step_manager import StepDatasetManager
+
+        dataset_manager = StepDatasetManager()
+
+        builder = TaskBuilder(registry=registry, dataset_manager=dataset_manager)
 
         # Build the task
         task = builder.invoke(config_dict)
@@ -124,9 +130,10 @@ def run_task(config_path: Path, article_id: Optional[int] = None) -> None:
             inputs["article_id"] = article_id
             logger.info(f"Processing article ID: {article_id}")
 
-        # Execute task
-        logger.info("Executing task...")
-        result = task.invoke(inputs)
+        logger.info("Executing task with tracing to enable dataset creation...")
+
+        # Execute the task with tracing to enable dataset creation
+        result = builder.invoke_with_tracing(config_dict, inputs)
 
         logger.info("Task completed successfully")
         logger.info(f"Result: {result}")

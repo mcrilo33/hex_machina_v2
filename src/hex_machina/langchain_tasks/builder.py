@@ -479,37 +479,47 @@ class TaskBuilder(Runnable):
 
             client = Client()
 
-            # Debug: Log the config structure
-            self._logger.info(f"🔍 Debug: Config type: {type(config)}")
-            self._logger.info(
-                f"🔍 Debug: Config has datasets attr: {hasattr(config, 'datasets')}"
+            # Debug logging for configuration
+            self._logger.debug(f"Config type: {type(config)}")
+            self._logger.debug(
+                f"Config has datasets attr: {hasattr(config, 'datasets')}"
             )
-            if hasattr(config, "datasets"):
-                self._logger.info(f"🔍 Debug: Config datasets: {config.datasets}")
-                self._logger.info(
-                    f"🔍 Debug: Config datasets length: {len(config.datasets) if config.datasets else 0}"
-                )
+            self._logger.debug(
+                f"Config datasets: {getattr(config, 'datasets', 'No datasets')}"
+            )
+            self._logger.debug(
+                f"Config datasets length: {len(getattr(config, 'datasets', []))}"
+            )
 
-            # Determine the appropriate trace_id based on the task strategy
-            trace_id = self._get_appropriate_trace_id(config, run_tree)
-
-            if not trace_id:
-                self._logger.warning(
-                    "No appropriate trace_id found, skipping dataset generation."
-                )
+            if not hasattr(config, "datasets") or not config.datasets:
+                self._logger.info("No datasets configured, skipping dataset generation")
                 return
 
-            # Process step-range datasets if defined
-            if hasattr(config, "datasets") and config.datasets:
-                self._logger.info(
-                    f"🔍 Processing {len(config.datasets)} step-range datasets"
-                )
-                for dataset_def in config.datasets:
-                    self._create_step_range_dataset_from_traces(
-                        config, dataset_def, trace_id, client
+            self._logger.info(f"Processing {len(config.datasets)} step-range datasets")
+
+            # Process each dataset definition
+            for dataset_def in config.datasets:
+                if not dataset_def.enabled:
+                    self._logger.debug(f"Skipping disabled dataset: {dataset_def.name}")
+                    continue
+
+                # Find the RunnableEach trace for this dataset
+                trace_id = self._find_runnable_each_trace_id(run_tree)
+                if not trace_id:
+                    self._logger.warning(
+                        f"Could not find RunnableEach trace for dataset '{dataset_def.name}'"
                     )
-            else:
-                self._logger.info("🔍 No step-range datasets found in config")
+                    continue
+
+                self._logger.info(f"Found RunnableEach trace_id: {trace_id}")
+
+                # Create the step-range dataset
+                self._create_step_range_dataset_from_traces(
+                    config=config,
+                    dataset_def=dataset_def,
+                    run_id=trace_id,
+                    client=client,
+                )
 
         except Exception as e:
             self._logger.error(f"Error generating datasets from traces: {e}")
@@ -595,7 +605,7 @@ class TaskBuilder(Runnable):
         self,
         config: TaskConfig,
         dataset_def: "DatasetDefinition",
-        trace_id: str,
+        run_id: str,
         client: Any,
     ) -> None:
         """Create a step-range dataset from LangSmith traces using bulk operations."""
@@ -603,7 +613,7 @@ class TaskBuilder(Runnable):
             # Query for input step runs
             input_runs = list(
                 client.list_runs(
-                    trace=trace_id,
+                    trace=run_id,
                     select=["name", "inputs", "outputs", "run_type", "extra"],
                     filter=f"and(eq(metadata_key, 'step_name'), eq(metadata_value, '{dataset_def.input_step}'))",
                 )
@@ -612,7 +622,7 @@ class TaskBuilder(Runnable):
             # Query for output step runs
             output_runs = list(
                 client.list_runs(
-                    trace=trace_id,
+                    trace=run_id,
                     select=["name", "inputs", "outputs", "run_type", "extra"],
                     filter=f"and(eq(metadata_key, 'step_name'), eq(metadata_value, '{dataset_def.output_step}'))",
                 )
@@ -620,27 +630,31 @@ class TaskBuilder(Runnable):
 
             if not input_runs or not output_runs:
                 self._logger.warning(
-                    f"⚠️ No matching runs found for dataset '{dataset_def.name}', "
+                    f"No matching runs found for dataset '{dataset_def.name}', "
                     f"input_step: {dataset_def.input_step}, output_step: {dataset_def.output_step}"
                 )
                 return
 
             self._logger.info(
-                f"✅ Found {len(input_runs)} input runs and {len(output_runs)} output runs "
-                f"for dataset '{dataset_def.name}'"
+                f"Found {len(input_runs)} input runs and {len(output_runs)} output runs for dataset '{dataset_def.name}'"
             )
 
             # Create the step-range dataset
             dataset = self.dataset_manager.generator.create_step_range_dataset(
                 task_name=config.name,
                 dataset_def=dataset_def,
-                run_id=str(trace_id),
+                run_id=str(run_id),
             )
 
             if dataset:
                 # Prepare all examples data for bulk creation
                 examples_data = []
                 min_runs = min(len(input_runs), len(output_runs))
+
+                self._logger.info(
+                    f"Preparing examples: input_runs={len(input_runs)}, "
+                    f"output_runs={len(output_runs)}, min_runs={min_runs}"
+                )
 
                 for i in range(min_runs):
                     input_run = input_runs[i]
@@ -650,19 +664,34 @@ class TaskBuilder(Runnable):
                     input_data = input_run.inputs
                     output_data = output_run.outputs
 
-                    examples_data.append(
-                        {
-                            "inputs": input_data,
-                            "outputs": output_data,
-                        }
+                    self._logger.debug(
+                        f"Example {i}: input_keys={list(input_data.keys()) if input_data else 'None'}, "
+                        f"output_keys={list(output_data.keys()) if output_data else 'None'}"
                     )
+
+                    # Create example data structure
+                    example_data = {
+                        "inputs": input_data or {},
+                        "outputs": output_data or {},
+                        "metadata": {
+                            "run_id": run_id,
+                            "step_name": dataset_def.name,
+                            "input_step": dataset_def.input_step,
+                            "output_step": dataset_def.output_step,
+                        },
+                    }
+                    examples_data.append(example_data)
+
+                self._logger.info(
+                    f"Prepared {len(examples_data)} examples for bulk creation"
+                )
 
                 # Bulk create all examples at once
                 if examples_data:
                     self.dataset_manager.generator.bulk_add_step_range_examples(
                         dataset=dataset,
                         examples_data=examples_data,
-                        run_id=str(trace_id),
+                        run_id=str(run_id),
                         dataset_def=dataset_def,
                         task_name=config.name,
                     )

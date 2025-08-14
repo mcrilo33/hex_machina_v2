@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from langsmith import Client, schemas
 
-from .models import DatasetDefinition, StepDataset
+from .models import DatasetDefinition
 
 
 class DatasetGenerator:
@@ -44,259 +44,40 @@ class DatasetGenerator:
 
         self._logger.info("DatasetGenerator initialized")
 
-    def create_step_dataset(
-        self,
-        task_name: str,
-        step_name: str,
-        step_config: StepDataset,
-        run_id: str,
-        grouped: bool = False,
-    ) -> Optional[schemas.Dataset]:
-        """Create or get a dataset for a specific step.
-
-        Args:
-            task_name: Name of the task
-            step_name: Name of the step
-            step_config: Step dataset configuration
-            run_id: Unique identifier for the task run
-
-        Returns:
-            The dataset if creation is enabled, None otherwise
-        """
-        if not step_config.enabled:
-            return None
-
-        # Generate dataset name
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        dataset_name = f"{task_name}_{step_name}_{timestamp}"
-
-        # Check if we already have this dataset
-        if dataset_name in self._dataset_cache:
-            return self._dataset_cache[dataset_name]
-
-        try:
-            # Create the dataset
-            description = (
-                step_config.description
-                or f"Dataset for {step_name} step of {task_name}"
-            )
-
-            dataset = self.client.create_dataset(
-                dataset_name=dataset_name,
-                description=description,
-                data_type=schemas.DataType.kv,
-            )
-
-            # Cache the dataset and initialize example count
-            self._dataset_cache[dataset_name] = dataset
-            self._example_counts[dataset_name] = 0
-
-            self._logger.info(f"Created dataset: {dataset_name} (ID: {dataset.id})")
-            return dataset
-
-        except Exception as e:
-            self._logger.warning(f"Failed to create dataset {dataset_name}: {e}")
-            return None
-
-    def create_task_dataset(
-        self,
-        task_name: str,
-        run_id: str,
-    ) -> Optional[schemas.Dataset]:
-        """Create or get a dataset for the entire task.
-
-        Args:
-            task_name: Name of the task
-            task_config: Task dataset configuration
-            run_id: Unique identifier for the task run
-
-        Returns:
-            The dataset if creation is enabled, None otherwise
-        """
-        # Generate dataset name
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        dataset_name = f"{task_name}_task_{timestamp}"
-
-        # Check if we already have this dataset
-        if dataset_name in self._dataset_cache:
-            return self._dataset_cache[dataset_name]
-
-        try:
-            # Create the dataset
-            description = f"Dataset for complete task execution: {task_name}"
-
-            dataset = self.client.create_dataset(
-                dataset_name=dataset_name,
-                description=description,
-                data_type=schemas.DataType.kv,
-            )
-
-            # Cache the dataset and initialize example count
-            self._dataset_cache[dataset_name] = dataset
-            self._example_counts[dataset_name] = 0
-
-            self._logger.info(
-                f"Created task dataset: {dataset_name} (ID: {dataset.id})"
-            )
-            return dataset
-
-        except Exception as e:
-            self._logger.warning(f"Failed to create task dataset {dataset_name}: {e}")
-            return None
-
-    def add_task_example(
-        self,
-        dataset: schemas.Dataset,
-        inputs: Dict[str, Any],
-        outputs: Dict[str, Any],
-        run_id: str,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> Optional[schemas.Example]:
-        """Add an example to a task-level dataset.
-
-        Args:
-            dataset: The dataset to add the example to
-            inputs: Input data for the task
-            outputs: Output data from the task
-            run_id: Unique identifier for the task run
-            metadata: Additional metadata
-
-        Returns:
-            The created example if successful, None otherwise
-        """
-        try:
-            # Prepare metadata
-            example_metadata = {
-                "run_id": run_id,
-                "example_type": "task_level",
-                "created_at": datetime.now().isoformat(),
-            }
-            if metadata:
-                example_metadata.update(metadata)
-
-            # Create the example
-            example = self.client.create_example(
-                inputs=inputs,
-                outputs=outputs,
-                dataset_id=dataset.id,
-                metadata=example_metadata,
-            )
-
-            # Update example count
-            dataset_name = dataset.name
-            self._example_counts[dataset_name] = (
-                self._example_counts.get(dataset_name, 0) + 1
-            )
-
-            self._logger.debug(
-                f"Added task example to dataset {dataset_name} (run_id: {run_id})"
-            )
-
-            # Check if we should create a split
-            self._maybe_create_split(dataset, dataset_name)
-
-            return example
-
-        except Exception as e:
-            self._logger.warning(
-                f"Failed to add task example to dataset {dataset.name}: {e}"
-            )
-            return None
-
-    def add_step_example(
-        self,
-        dataset: schemas.Dataset,
-        inputs: Dict[str, Any],
-        outputs: Dict[str, Any],
-        run_id: str,
-        step_name: str,
-        task_name: str,
-        additional_metadata: Optional[Dict[str, Any]] = None,
-    ) -> Optional[schemas.Example]:
-        """Add an example to a step dataset.
-
-        Args:
-            dataset: The dataset to add the example to
-            inputs: Step inputs
-            outputs: Step outputs
-            run_id: Task run identifier
-            step_name: Name of the step
-            task_name: Name of the task
-            additional_metadata: Any additional metadata
-
-        Returns:
-            The created example if successful, None otherwise
-        """
-        try:
-            # Prepare metadata
-            metadata = {
-                "run_id": run_id,
-                "step_name": step_name,
-                "task_name": task_name,
-                "timestamp": datetime.now().isoformat(),
-                "example_type": "step_execution",
-            }
-
-            if additional_metadata:
-                metadata.update(additional_metadata)
-
-            # Create the example
-            example = self.client.create_example(
-                inputs=inputs, outputs=outputs, dataset_id=dataset.id, metadata=metadata
-            )
-
-            # Update example count
-            dataset_name = dataset.name
-            self._example_counts[dataset_name] = (
-                self._example_counts.get(dataset_name, 0) + 1
-            )
-
-            self._logger.debug(
-                f"Added example to dataset {dataset_name} (run_id: {run_id})"
-            )
-
-            self._maybe_create_split(dataset, dataset_name)
-
-            return example
-
-        except Exception as e:
-            self._logger.warning(
-                f"Failed to add example to dataset {dataset.name}: {e}"
-            )
-            return None
-
     def create_step_range_dataset(
         self,
         task_name: str,
         dataset_def: "DatasetDefinition",
         run_id: str,
     ) -> Optional[schemas.Dataset]:
-        """Create a dataset that spans multiple steps."""
-        if not dataset_def.enabled:
-            return None
+        """Create a step-range dataset for evaluating step ranges.
 
-        # Generate dataset name
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        dataset_name = f"{task_name}_{dataset_def.name}_{timestamp}"
+        Args:
+            task_name: Name of the task
+            dataset_def: Dataset definition with input/output step mappings
+            run_id: Task run identifier
 
-        # Check if we already have this dataset
-        if dataset_name in self._dataset_cache:
-            return self._dataset_cache[dataset_name]
-
+        Returns:
+            Created dataset if successful, None otherwise
+        """
         try:
-            # Create the dataset
-            description = (
-                dataset_def.description
-                or f"Dataset for {dataset_def.input_step} -> {dataset_def.output_step} pipeline"
-            )
+            # Generate dataset name
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            dataset_name = f"{task_name}_{dataset_def.name}_{timestamp}"
 
+            # Check if dataset already exists
+            if dataset_name in self._dataset_cache:
+                self._logger.debug(f"Dataset {dataset_name} already exists in cache")
+                return self._dataset_cache[dataset_name]
+
+            # Create dataset
             dataset = self.client.create_dataset(
                 dataset_name=dataset_name,
-                description=description,
-                data_type=schemas.DataType.kv,
+                description=dataset_def.description
+                or f"Step-range dataset for {dataset_def.name} in {task_name}",
             )
 
-            # Cache the dataset and initialize example count
+            # Cache the dataset
             self._dataset_cache[dataset_name] = dataset
             self._example_counts[dataset_name] = 0
 
@@ -306,8 +87,8 @@ class DatasetGenerator:
             return dataset
 
         except Exception as e:
-            self._logger.warning(
-                f"Failed to create step-range dataset {dataset_name}: {e}"
+            self._logger.error(
+                f"Failed to create step-range dataset {dataset_def.name}: {e}"
             )
             return None
 
@@ -361,22 +142,62 @@ class DatasetGenerator:
                 )
 
             # Bulk create all examples at once using dataset_id parameter
-            created_examples = self.client.create_examples(
-                dataset_id=dataset.id,
-                examples=examples_to_create,
-            )
+            self._logger.info(f"Creating {len(examples_to_create)} examples...")
 
-            # Update example count
+            try:
+                created_examples = self.client.create_examples(
+                    dataset_id=dataset.id,
+                    examples=examples_to_create,
+                )
+                self._logger.info(f"LangSmith API response: {created_examples}")
+
+                # Extract the actual count from the response
+                if hasattr(created_examples, "count"):
+                    actual_count = created_examples.count
+                elif isinstance(created_examples, dict) and "count" in created_examples:
+                    actual_count = created_examples["count"]
+                else:
+                    actual_count = len(examples_to_create)  # Fallback
+
+                self._logger.info(f"Created {actual_count} examples")
+
+            except Exception as e:
+                self._logger.error(f"Failed to create examples via bulk API: {e}")
+                # Fallback: try creating examples one by one
+                self._logger.info("Falling back to individual example creation...")
+                created_examples = []
+                for i, example_data in enumerate(examples_to_create):
+                    try:
+                        example = self.client.create_example(
+                            dataset_id=dataset.id,
+                            inputs=example_data["inputs"],
+                            outputs=example_data["outputs"],
+                            metadata=example_data["metadata"],
+                        )
+                        created_examples.append(example)
+                        self._logger.debug(
+                            f"Created example {i+1}/{len(examples_to_create)}"
+                        )
+                    except Exception as individual_error:
+                        self._logger.error(
+                            f"Failed to create example {i+1}: {individual_error}"
+                        )
+                        continue
+                actual_count = len(created_examples)
+
+            # Update example count with the actual count from the response
             dataset_name = dataset.name
-            self._example_counts[dataset_name] = self._example_counts.get(
-                dataset_name, 0
-            ) + len(created_examples)
+            previous_count = self._example_counts.get(dataset_name, 0)
+            new_count = previous_count + actual_count
+            self._example_counts[dataset_name] = new_count
 
             self._logger.info(
-                f"Bulk added {len(created_examples)} examples to step-range dataset {dataset_name}"
+                f"Added {actual_count} examples to dataset {dataset_name}. "
+                f"Total count: {new_count}"
             )
 
             # Check if we should create a split
+            self._logger.info(f"Checking split creation for dataset {dataset_name}")
             self._maybe_create_split(dataset, dataset_name)
 
             return created_examples
@@ -398,8 +219,17 @@ class DatasetGenerator:
         small_split_threshold = 3
         example_count = self._example_counts.get(dataset_name, 0)
 
+        self._logger.info(
+            f"Split creation check for dataset {dataset_name}: "
+            f"example_count={example_count}, threshold={small_split_threshold}"
+        )
+
         if example_count >= small_split_threshold:
             try:
+                self._logger.info(
+                    f"Threshold met! Creating '{default_split_name}' split..."
+                )
+
                 # Get the first 3 examples for the split
                 examples = self.client.list_examples(
                     dataset_id=dataset.id, limit=small_split_threshold
@@ -407,9 +237,9 @@ class DatasetGenerator:
 
                 # Convert generator to list to get length and slice
                 examples_list = list(examples)
+                self._logger.info(f"Found {len(examples_list)} examples in dataset")
 
-                # Get the first N examples for the split
-                small_split_threshold -= 1
+                # Create split with the first 3 examples
                 split_examples = examples_list[:small_split_threshold]
 
                 self.client.update_dataset_splits(
@@ -423,9 +253,13 @@ class DatasetGenerator:
                 )
 
             except Exception as e:
-                self._logger.warning(
-                    f"Failed to prepare split for dataset {dataset_name}: {e}"
+                self._logger.error(
+                    f"Failed to create split for dataset {dataset_name}: {e}"
                 )
+        else:
+            self._logger.info(
+                f"Split creation skipped: {example_count} examples < {small_split_threshold} threshold"
+            )
 
     def get_dataset_stats(self) -> Dict[str, Any]:
         """Get statistics about managed datasets.

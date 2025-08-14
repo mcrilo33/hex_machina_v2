@@ -1,7 +1,7 @@
 """
 Dataset models for LangChain tasks.
 
-This module defines the data structures for managing step-level datasets
+This module defines the data structures for managing step-range datasets
 and examples with run_id grouping.
 """
 
@@ -9,17 +9,6 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
-
-
-class StepDataset(BaseModel):
-    """Configuration for a step's dataset."""
-
-    enabled: bool = Field(
-        default=False, description="Whether to create a dataset for this step"
-    )
-    description: Optional[str] = Field(
-        default=None, description="Custom description for the dataset"
-    )
 
 
 class DatasetExample(BaseModel):
