@@ -123,3 +123,105 @@ def create_split_with_evaluator(
     except Exception as e:
         logger.error(f"Failed to create split: {e}")
         raise
+
+
+def delete_split(dataset_name: str, split_name: str) -> None:
+    """Delete a split from a dataset.
+
+    Args:
+        dataset_name: Name of the LangSmith dataset
+        split_name: Name of the split to delete
+    """
+    logger = logging.getLogger("langchain_tasks.datasets.split_creator")
+
+    try:
+        logger.info(f"Starting split deletion for dataset: {dataset_name}")
+        logger.info(f"Split to delete: {split_name}")
+
+        # Get the LangSmith client
+        client = Client()
+
+        # List available datasets to find the exact name
+        datasets = list(client.list_datasets())
+        logger.info(f"Found {len(datasets)} available datasets")
+
+        # Find the dataset by name (partial match)
+        target_dataset = None
+        for dataset in datasets:
+            if dataset_name in dataset.name:
+                target_dataset = dataset
+                logger.info(
+                    f"Found matching dataset: {dataset.name} (ID: {dataset.id})"
+                )
+                break
+
+        if not target_dataset:
+            logger.error(f"Dataset '{dataset_name}' not found")
+            logger.info("Available datasets:")
+            for dataset in datasets[:10]:  # Show first 10
+                logger.info(f"  - {dataset.name}")
+            if len(datasets) > 10:
+                logger.info(f"  ... and {len(datasets) - 10} more")
+            raise ValueError(f"Dataset '{dataset_name}' not found")
+
+        # Check if the split exists by looking at the dataset splits
+        dataset_splits = client.list_dataset_splits(dataset_id=target_dataset.id)
+        logger.info(f"Dataset splits: {dataset_splits}")
+
+        if not dataset_splits:
+            logger.warning(f"Dataset '{dataset_name}' has no splits")
+            return
+
+        # Check if the split exists
+        if split_name not in dataset_splits:
+            logger.warning(
+                f"Split '{split_name}' not found in dataset '{dataset_name}'"
+            )
+            logger.info("Available splits:")
+            for split in dataset_splits:
+                logger.info(f"  - {split}")
+            return
+
+        logger.info(f"Found split '{split_name}' in dataset '{dataset_name}'")
+
+        # Delete the split by removing all examples from it
+        logger.info(
+            f"Removing all examples from split '{split_name}' in dataset '{dataset_name}'..."
+        )
+
+        # First, we need to get the examples currently in the split
+        # We can get this from the dataset examples that have this split
+        try:
+            # Get examples from the specific split
+            split_examples = list(
+                client.list_examples(
+                    dataset_name=target_dataset.name, splits=[split_name]
+                )
+            )
+            logger.info(f"Found {len(split_examples)} examples in split '{split_name}'")
+
+            if split_examples:
+                # Get the example IDs to remove
+                example_ids_to_remove = [example.id for example in split_examples]
+
+                # Remove all examples from the split
+                client.update_dataset_splits(
+                    dataset_id=target_dataset.id,
+                    split_name=split_name,
+                    example_ids=example_ids_to_remove,
+                    remove=True,  # Remove these examples from the split
+                )
+
+                logger.info(
+                    f"Split '{split_name}' cleared successfully from dataset '{dataset_name}'"
+                )
+            else:
+                logger.info(f"Split '{split_name}' is already empty")
+
+        except Exception as e:
+            logger.error(f"Failed to clear split: {e}")
+            raise
+
+    except Exception as e:
+        logger.error(f"Failed to delete split: {e}")
+        raise

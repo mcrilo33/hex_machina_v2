@@ -232,6 +232,15 @@ def main():
         help="Name for the new split (default: positive)",
     )
 
+    # Delete-split command
+    delete_split_parser = dataset_subparsers.add_parser(
+        "delete-split", help="Delete a split from a dataset"
+    )
+    delete_split_parser.add_argument(
+        "dataset_name", help="Name of the LangSmith dataset"
+    )
+    delete_split_parser.add_argument("split_name", help="Name of the split to delete")
+
     # Parse arguments
     args = parser.parse_args()
 
@@ -253,6 +262,10 @@ def main():
             create_split_with_evaluator(
                 args.dataset_name, args.evaluator_name, args.split_name
             )
+        elif args.dataset_command == "delete-split":
+            from .datasets import delete_split
+
+            delete_split(args.dataset_name, args.split_name)
         else:
             dataset_parser.print_help()
     else:

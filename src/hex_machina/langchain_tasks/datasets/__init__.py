@@ -7,7 +7,7 @@ for step-range evaluations.
 
 from .generator import DatasetGenerator
 from .models import DatasetDefinition
-from .split_creator import create_split_with_evaluator
+from .split_creator import create_split_with_evaluator, delete_split
 from .step_manager import StepDatasetManager
 
 __all__ = [
@@ -15,4 +15,5 @@ __all__ = [
     "DatasetDefinition",
     "StepDatasetManager",
     "create_split_with_evaluator",
+    "delete_split",
 ]
