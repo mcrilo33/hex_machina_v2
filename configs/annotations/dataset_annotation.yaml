@@ -1,0 +1,41 @@
+annotation_session:
+  name: "article_completeness_annotation"
+  description: "Annotate article completeness examples with quality and relevance scores"
+  
+  dataset:
+    name: "article_completeness_dataset"
+    split: "train"
+  
+  display_fields:
+    inputs:
+      - "article_text"
+      - "article_url"
+      - "metadata['source_domain']"
+      - "metadata['publication_date']"
+    outputs:
+      - "is_complete"
+      - "reasoning"
+      - "confidence_score"
+  
+  annotation_fields:
+    inputs:
+      - name: "article_text_quality"
+        field_type: "categorical"
+        options: ["high", "medium", "low"]
+      - name: "content_relevance"
+        field_type: "categorical"
+        options: ["relevant", "somewhat_relevant", "irrelevant"]
+      - name: "text_readability"
+        field_type: "categorical"
+        options: ["excellent", "good", "fair", "poor"]
+    
+    outputs:
+      - name: "annotation_confidence"
+        field_type: "categorical"
+        options: ["high", "medium", "low"]
+      - name: "notes"
+        field_type: "free_text"
+        options: "free_text"
+      - name: "suggested_improvements"
+        field_type: "free_text"
+        options: "free_text"

@@ -241,6 +241,14 @@ def main():
     )
     delete_split_parser.add_argument("split_name", help="Name of the split to delete")
 
+    # Annotate command
+    annotate_parser = dataset_subparsers.add_parser(
+        "annotate", help="Run interactive annotation session on dataset"
+    )
+    annotate_parser.add_argument(
+        "-c", "--config", required=True, help="Path to annotation configuration file"
+    )
+
     # Parse arguments
     args = parser.parse_args()
 
@@ -266,6 +274,10 @@ def main():
             from .datasets import delete_split
 
             delete_split(args.dataset_name, args.split_name)
+        elif args.dataset_command == "annotate":
+            from .datasets import run_interactive_annotation
+
+            run_interactive_annotation(Path(args.config))
         else:
             dataset_parser.print_help()
     else:

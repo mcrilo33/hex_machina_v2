@@ -6,7 +6,7 @@ This evaluator checks if the article is marked as complete based on the LLM outp
 
 import json
 import logging
-from typing import Any, Dict
+from typing import Any
 
 
 def article_completeness_evaluator(run: Any, example: Any) -> bool:
@@ -27,51 +27,51 @@ def article_completeness_evaluator(run: Any, example: Any) -> bool:
         if not hasattr(example, "outputs"):
             logger.warning("Example does not have outputs attribute")
             return False
-        
+
         if "generations" not in example.outputs:
             logger.warning("Example outputs does not contain 'generations' field")
             return False
-        
+
         generations = example.outputs["generations"]
-        
+
         # Check if generations is a list and has content
         if not isinstance(generations, list) or len(generations) == 0:
             logger.warning("Generations is not a list or is empty")
             return False
-        
+
         # Get the first generation
         first_generation = generations[0]
         if not isinstance(first_generation, list) or len(first_generation) == 0:
             logger.warning("First generation is not a list or is empty")
             return False
-        
+
         # Get the text from the first generation item
         generation_item = first_generation[0]
         if not isinstance(generation_item, dict):
             logger.warning("Generation item is not a dictionary")
             return False
-        
+
         if "text" not in generation_item:
             logger.warning("Generation item does not contain 'text' field")
             return False
-        
+
         text_content = generation_item["text"]
-        
+
         # Parse the JSON content
         try:
             parsed_content = json.loads(text_content)
         except json.JSONDecodeError as e:
             logger.warning(f"Failed to parse JSON from text: {e}")
             return False
-        
+
         # Check if the parsed content has the is_complete field
         if "is_complete" not in parsed_content:
             logger.warning("Parsed content does not contain 'is_complete' field")
             return False
-        
+
         # Get the is_complete value
         is_complete = parsed_content["is_complete"]
-        
+
         # Check if it's a boolean and True
         if isinstance(is_complete, bool):
             result = is_complete
