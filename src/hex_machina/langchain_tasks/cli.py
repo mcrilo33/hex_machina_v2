@@ -210,6 +210,28 @@ def main():
         "action", choices=["info", "clear", "setup"], help="Cache action to perform"
     )
 
+    # Dataset management commands
+    dataset_parser = subparsers.add_parser("dataset", help="Manage LangSmith datasets")
+    dataset_subparsers = dataset_parser.add_subparsers(
+        dest="dataset_command", help="Available dataset commands"
+    )
+
+    # Create-split command
+    create_split_parser = dataset_subparsers.add_parser(
+        "create-split", help="Create a split with positive examples from evaluator"
+    )
+    create_split_parser.add_argument(
+        "dataset_name", help="Name of the LangSmith dataset to evaluate"
+    )
+    create_split_parser.add_argument(
+        "evaluator_name", help="Name of the evaluator to use"
+    )
+    create_split_parser.add_argument(
+        "--split-name",
+        default="positive",
+        help="Name for the new split (default: positive)",
+    )
+
     # Parse arguments
     args = parser.parse_args()
 
@@ -224,6 +246,15 @@ def main():
         run_task(config_path, args.article_id, enable_caching)
     elif args.command == "cache":
         manage_cache(args.action)
+    elif args.command == "dataset":
+        if args.dataset_command == "create-split":
+            from .datasets import create_split_with_evaluator
+
+            create_split_with_evaluator(
+                args.dataset_name, args.evaluator_name, args.split_name
+            )
+        else:
+            dataset_parser.print_help()
     else:
         parser.print_help()
 
