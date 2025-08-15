@@ -99,6 +99,9 @@ __pypackages__/
 celerybeat-schedule
 celerybeat.pid
 
+# LangChain cache
+storage/.langchain.db
+
 # SageMath parsed files
 *.sage.py
 

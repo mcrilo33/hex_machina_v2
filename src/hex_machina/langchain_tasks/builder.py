@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Union
 from langchain_core.runnables import Runnable, RunnableSequence
 from pydantic import BaseModel, Field
 
+from .cache_utils import setup_default_cache
 from .datasets import StepDatasetManager
 from .datasets.models import DatasetDefinition
 from .prompts.registry import PromptRegistry
@@ -266,6 +267,7 @@ class TaskBuilder(Runnable):
         registry: Optional[RunnableRegistry] = None,
         dataset_manager: Optional[StepDatasetManager] = None,
         prompt_registry: Optional[PromptRegistry] = None,
+        enable_caching: bool = True,
     ):
         """Initialize the task builder.
 
@@ -273,12 +275,21 @@ class TaskBuilder(Runnable):
             registry: Runnable registry for discovering runnables
             dataset_manager: Optional dataset manager for step-level datasets
             prompt_registry: Registry for loading prompt templates
+            enable_caching: Whether to enable SQLite caching for LLM calls
         """
         self.registry = registry or RunnableRegistry()
         self.dataset_manager = dataset_manager
         self.prompt_registry = prompt_registry or PromptRegistry()
         self.strategy_factory = TaskStrategyFactory()
         self._logger = logging.getLogger("langchain_tasks.builder")
+
+        # Initialize caching if enabled
+        if enable_caching:
+            try:
+                setup_default_cache()
+                self._logger.info("SQLite caching enabled for LLM calls")
+            except Exception as e:
+                self._logger.warning(f"Failed to initialize caching: {e}")
 
         self._logger.info("TaskBuilder initialized")
 

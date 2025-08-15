@@ -25,7 +25,7 @@ except ImportError:
     pass
 
 from .builder import TaskBuilder
-from .registry import RunnableRegistry
+from .cache_utils import clear_cache, get_cache_info, setup_default_cache
 
 
 def setup_logging() -> None:
@@ -93,164 +93,133 @@ def _resolve_env_vars(obj):
         return obj
 
 
-def run_task(config_path: Path, article_id: Optional[int] = None) -> None:
+def run_task(
+    config_path: Path, article_id: Optional[int] = None, enable_caching: bool = True
+) -> None:
     """Run a single task from YAML configuration.
 
     Args:
         config_path: Path to the YAML configuration file
-        article_id: Optional article ID to process
+        article_id: Optional article ID to process (for article-specific tasks)
+        enable_caching: Whether to enable caching (default: True)
     """
-    logger = logging.getLogger("langchain_tasks.cli")
-
     try:
-        # Validate and load configuration
-        config_path = validate_yaml_config(config_path)
-        config_dict = load_yaml_config(config_path)
+        # Load configuration
+        config = load_yaml_config(config_path)
 
-        logger.info(f"Running task from configuration: {config_path}")
-
-        # Build and run task
-        registry = RunnableRegistry()
-
-        # Create dataset manager to enable dataset creation
-        from .datasets.step_manager import StepDatasetManager
-
-        dataset_manager = StepDatasetManager()
-
-        builder = TaskBuilder(registry=registry, dataset_manager=dataset_manager)
+        # Create task builder with caching preference
+        builder = TaskBuilder(enable_caching=enable_caching)
 
         # Build the task
-        task = builder.invoke(config_dict)
-        logger.info(f"Task built successfully: {type(task).__name__}")
+        task = builder.invoke(config)
+        print(f"Task '{config.get('name', 'Unknown')}' built successfully!")
 
-        # Prepare inputs
+        # Prepare inputs for execution
         inputs = {}
         if article_id:
             inputs["article_id"] = article_id
-            logger.info(f"Processing article ID: {article_id}")
+            print(f"Processing article ID: {article_id}")
 
-        logger.info("Executing task with tracing to enable dataset creation...")
+        # Execute the task with tracing
+        print("Executing task...")
+        result = builder.invoke_with_tracing(config, inputs)
 
-        # Execute the task with tracing to enable dataset creation
-        result = builder.invoke_with_tracing(config_dict, inputs)
+        print("Task executed successfully!")
+        print(f"Result type: {type(result).__name__}")
 
-        logger.info("Task completed successfully")
-        logger.info(f"Result: {result}")
+        # Show a preview of the result
+        if hasattr(result, "__len__") and len(result) > 0:
+            print(f"Result contains {len(result)} items")
+            if isinstance(result, list) and len(result) > 0:
+                print(f"First item type: {type(result[0]).__name__}")
+        else:
+            print(f"Result: {result}")
 
     except Exception as e:
-        logger.error(f"Task execution failed: {e}")
-        raise
+        print(f"Error running task: {e}")
+        import traceback
+
+        traceback.print_exc()
+        sys.exit(1)
 
 
-def run_experiment(config_path: Path, input_file: Optional[Path] = None) -> None:
-    """Run an experiment from YAML configuration.
+def manage_cache(action: str) -> None:
+    """Manage the SQLite cache.
 
     Args:
-        config_path: Path to the YAML configuration file
-        input_file: Optional JSON file with test inputs
+        action: Action to perform ('info', 'clear', 'setup')
     """
-    logger = logging.getLogger("langchain_tasks.cli")
-
     try:
-        # Validate and load configuration
-        config_path = validate_yaml_config(config_path)
-        logger.info(f"Running experiment from configuration: {config_path}")
+        if action == "info":
+            cache_info = get_cache_info()
+            print("Cache Information:")
+            for key, value in cache_info.items():
+                print(f"  {key}: {value}")
 
-        # Load test inputs if provided
-        if input_file:
-            import json
+        elif action == "clear":
+            clear_cache()
+            print("Cache cleared successfully!")
 
-            with open(input_file, "r") as f:
-                inputs = json.load(f)
-            logger.info(f"Loaded test inputs from: {input_file}")
+        elif action == "setup":
+            setup_default_cache()
+            print("Cache setup completed!")
 
-        # Use our new ExperimentYAMLRunner
-        from ..experiments import ExperimentYAMLRunner
-
-        experiment_runner = ExperimentYAMLRunner()
-
-        # Execute experiment using the new runner
-        logger.info("Executing experiment...")
-        result = experiment_runner.run_experiment_from_yaml_sync(config_path)
-
-        logger.info("Experiment completed successfully")
-        logger.info(f"Target dataset: {result.get('target_dataset', 'unknown')}")
-        logger.info(f"Task variations: {len(result.get('task_variations', []))}")
-        logger.info(f"Evaluation results: {len(result.get('evaluation_results', []))}")
+        else:
+            print(f"Unknown cache action: {action}")
+            print("Available actions: info, clear, setup")
 
     except Exception as e:
-        logger.error(f"Experiment execution failed: {e}")
-        raise
+        print(f"Error managing cache: {e}")
+        sys.exit(1)
 
 
-def main() -> None:
+def main():
     """Main CLI entry point."""
-    setup_logging()
-    logger = logging.getLogger("langchain_tasks.cli")
-
     parser = argparse.ArgumentParser(
-        description="LangChain Tasks CLI - Run tasks and experiments from YAML configs",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Run a single task
-  langchain_tasks run -c configs/enrichment/tasks/content_completeness.yaml
-
-  # Run a task with specific article ID
-  langchain_tasks run -c configs/enrichment/tasks/content_completeness.yaml --article-id 123
-
-  # Run an experiment
-  langchain_tasks experiment -c configs/experiments/example_experiment.yaml
-
-  # Run an experiment with test inputs
-  langchain_tasks experiment -c configs/experiments/example_experiment.yaml --input-file test_inputs.json
-        """,
+        description="LangChain Tasks CLI - Run tasks and experiments from YAML configuration"
     )
-
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    # Run command
-    run_parser = subparsers.add_parser("run", help="Run a single task from YAML config")
-    run_parser.add_argument(
-        "-c", "--config", type=Path, required=True, help="Path to task YAML config file"
+    # Task command
+    task_parser = subparsers.add_parser(
+        "run", help="Run a task from YAML configuration"
     )
-    run_parser.add_argument(
-        "--article-id", type=int, help="Article ID from database (optional)"
+    task_parser.add_argument(
+        "-c", "--config", required=True, help="Path to YAML configuration file"
     )
-
-    # Experiment command
-    experiment_parser = subparsers.add_parser(
-        "experiment", help="Run experiments with multiple task variations"
+    task_parser.add_argument(
+        "--article-id",
+        type=int,
+        help="Article ID to process (for article-specific tasks)",
     )
-    experiment_parser.add_argument(
-        "-c",
-        "--config",
-        type=Path,
-        required=True,
-        help="Path to experiment YAML config file",
-    )
-    experiment_parser.add_argument(
-        "--input-file", type=Path, help="JSON file with test inputs (optional)"
+    task_parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="Disable SQLite caching for this task execution",
     )
 
+    # Cache management commands
+    cache_parser = subparsers.add_parser("cache", help="Manage SQLite cache")
+    cache_parser.add_argument(
+        "action", choices=["info", "clear", "setup"], help="Cache action to perform"
+    )
+
+    # Parse arguments
     args = parser.parse_args()
 
-    if not args.command:
+    # Setup logging
+    setup_logging()
+
+    if args.command == "run":
+        config_path = Path(args.config)
+        validate_yaml_config(config_path)
+        # Enable caching by default, unless --no-cache is specified
+        enable_caching = not args.no_cache
+        run_task(config_path, args.article_id, enable_caching)
+    elif args.command == "cache":
+        manage_cache(args.action)
+    else:
         parser.print_help()
-        sys.exit(1)
-
-    try:
-        if args.command == "run":
-            run_task(args.config, args.article_id)
-        elif args.command == "experiment":
-            run_experiment(args.config, args.input_file)
-        else:
-            logger.error(f"Unknown command: {args.command}")
-            sys.exit(1)
-
-    except Exception as e:
-        logger.error(f"CLI execution failed: {e}")
-        sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -6,6 +6,12 @@ LangChain tasks and experiments from YAML configuration files.
 """
 
 from .builder import TaskBuilder
+from .cache_utils import (
+    clear_cache,
+    get_cache_info,
+    setup_default_cache,
+    setup_sqlite_cache,
+)
 from .cli import main
 from .config.models import (
     EvaluationConfig,
@@ -29,4 +35,8 @@ __all__ = [
     "StepDatasetManager",
     "EvaluatorRegistry",
     "RunnableRegistry",
+    "setup_sqlite_cache",
+    "setup_default_cache",
+    "clear_cache",
+    "get_cache_info",
 ]

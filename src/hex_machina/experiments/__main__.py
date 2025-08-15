@@ -3,6 +3,8 @@ Command-line interface for running experiments.
 
 Usage:
     poetry run python -m src.hex_machina.experiments -c <config_file>
+    poetry run python -m src.hex_machina.experiments --cache-info
+    poetry run python -m src.hex_machina.experiments --cache-clear
 """
 
 import asyncio
@@ -13,6 +15,7 @@ from pathlib import Path
 import yaml
 from dotenv import load_dotenv
 
+from ..langchain_tasks.cache_utils import clear_cache, get_cache_info
 from .config_models import ExperimentConfig
 from .runner import ExperimentRunner
 
@@ -52,13 +55,51 @@ def load_experiment_config(config_path: str) -> ExperimentConfig:
         sys.exit(1)
 
 
+def show_cache_info():
+    """Display cache information."""
+    cache_info = get_cache_info()
+    print("Cache Information:")
+    for key, value in cache_info.items():
+        print(f"  {key}: {value}")
+
+
+def clear_experiment_cache():
+    """Clear the experiment cache."""
+    try:
+        clear_cache()
+        print("Cache cleared successfully!")
+    except Exception as e:
+        print(f"Error clearing cache: {e}")
+        sys.exit(1)
+
+
 async def main():
     """Main entry point for experiment execution."""
+    # Check for cache management commands first
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "--cache-info":
+            show_cache_info()
+            return
+        elif sys.argv[1] == "--cache-clear":
+            clear_experiment_cache()
+            return
+
+    # Regular experiment execution
     if len(sys.argv) < 3 or sys.argv[1] != "-c":
-        print("Usage: python -m src.hex_machina.experiments -c <config_file>")
+        print("Usage:")
+        print("  python -m src.hex_machina.experiments -c <config_file>")
+        print("  python -m src.hex_machina.experiments --cache-info")
+        print("  python -m src.hex_machina.experiments --cache-clear")
+        print("  python -m src.hex_machina.experiments -c <config_file> --no-cache")
         sys.exit(1)
 
     config_path = sys.argv[2]
+
+    # Check for --no-cache flag
+    enable_caching = True
+    if "--no-cache" in sys.argv:
+        enable_caching = False
+        print("Caching disabled for this experiment run")
 
     if not Path(config_path).exists():
         print(f"Config file not found: {config_path}")
@@ -78,9 +119,9 @@ async def main():
         print(f"Loading experiment configuration from: {config_path}")
         config = load_experiment_config(config_path)
 
-        # Create and run experiment
+        # Create and run experiment with caching preference
         print(f"Starting experiment: {config.name}")
-        runner = ExperimentRunner()
+        runner = ExperimentRunner(enable_caching=enable_caching)
 
         results = await runner.run_experiment(config)
 

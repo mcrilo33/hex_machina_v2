@@ -19,10 +19,15 @@ from .config_models import ExperimentConfig
 class ExperimentRunner:
     """Runner for executing experiments with task evaluation."""
 
-    def __init__(self):
-        """Initialize the experiment runner."""
+    def __init__(self, enable_caching: bool = True):
+        """Initialize the experiment runner.
+
+        Args:
+            enable_caching: Whether to enable SQLite caching for LLM calls
+        """
         self.client = Client()  # LangSmith client
-        self.task_builder = TaskBuilder()  # Use existing TaskBuilder
+        # Pass caching preference to TaskBuilder
+        self.task_builder = TaskBuilder(enable_caching=enable_caching)
         self._logger = logging.getLogger(__name__)
 
         self._logger.info("ExperimentRunner initialized")
