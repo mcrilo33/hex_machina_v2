@@ -12,7 +12,7 @@ template: |
   # CONTEXT
   Articles are automatically retrieved from HTML pages, which can introduce issues like content truncation, missing sections, paywall restrictions, or technical problems that make the content incomplete or unusable.
   You must judge completeness and truncation **only for the article’s main editorial content part in the provided text** — ignore any unrelated text before or after the article (e.g., headers, footers, ads).
-  Standard site boilerplate appearing after the main content (e.g., read more, newsletter sign-ups, related links, author bios, share buttons) is a **positive signal** that the main article content is complete.
+  Standard site boilerplate appearing after the main content (e.g., read more, newsletter sign-ups, related links, author name, author bios, share buttons) is a **positive signal** that the main article content is complete.
   Do not flag an article as incomplete if only the boilerplate or metadata is present without further editorial paragraphs.
   Return false only if the main editorial content itself shows clear signs of being cut off, such as a sentence ending mid-way or a paragraph stopping abruptly.
 

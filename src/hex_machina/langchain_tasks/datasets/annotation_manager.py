@@ -901,7 +901,6 @@ class AnnotationManager:
                 inputs=current_inputs,
                 outputs=current_outputs,
                 metadata=current_metadata,
-                split=config.dataset["split"],
             )
 
             self._logger.info(
