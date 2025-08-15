@@ -9,7 +9,7 @@ template: |
 
   # CONTEXT
   Articles are automatically retrieved from HTML pages, which can introduce various issues like content truncation, missing sections, paywall restrictions, or technical problems that make the content incomplete or unusable.
-  
+  You should only assess truncation at the beginning or end of the content.
 
   # INPUTS
   # The text content is provided between <START_OF_INPUT> and <END_OF_INPUT> tags.
@@ -37,7 +37,7 @@ template: |
     "is_complete": true/false,
     "reasons": [
       // Use only these predefined reasons:
-      // - "content_truncated" (if article's content is largely truncated)
+      // - "content_truncated" (if there are clear signs of truncation at the beginning or end of the content)
       // - "paywall_content" (if content is subscription-locked)
       // - "error_page" (if server errors or 404)
       // - "minimal_content" (if too short to be meaningful)

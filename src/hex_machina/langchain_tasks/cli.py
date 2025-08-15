@@ -26,6 +26,7 @@ except ImportError:
 
 from .builder import TaskBuilder
 from .cache_utils import clear_cache, get_cache_info, setup_default_cache
+from .datasets import StepDatasetManager
 
 
 def setup_logging() -> None:
@@ -107,8 +108,13 @@ def run_task(
         # Load configuration
         config = load_yaml_config(config_path)
 
-        # Create task builder with caching preference
-        builder = TaskBuilder(enable_caching=enable_caching)
+        # Create dataset manager for handling datasets defined in config
+        dataset_manager = StepDatasetManager()
+
+        # Create task builder with caching preference and dataset manager
+        builder = TaskBuilder(
+            enable_caching=enable_caching, dataset_manager=dataset_manager
+        )
 
         # Build the task
         task = builder.invoke(config)

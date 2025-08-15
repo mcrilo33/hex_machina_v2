@@ -11,6 +11,11 @@ split: ["small"]
 task:
   name: "ArticleIsCompleteTask"
   steps:
+    - name: text_truncator
+      runnable: TextTruncatorRunnable
+      config:
+        truncate_length: 2000
+
     - name: prompt_template
       runnable: PromptTemplate
       config:

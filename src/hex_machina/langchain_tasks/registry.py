@@ -164,7 +164,9 @@ class RunnableRegistry(Runnable):
         # Discover from custom_runnables package (new functionality)
         try:
             # Import the custom_runnables package
-            custom_package = importlib.import_module("langchain_tasks.custom_runnables")
+            custom_package = importlib.import_module(
+                "src.hex_machina.langchain_tasks.custom_runnables"
+            )
 
             # Get the package path
             package_path = Path(custom_package.__file__).parent
@@ -175,7 +177,9 @@ class RunnableRegistry(Runnable):
                     continue
 
                 # Import the module
-                module_name = f"langchain_tasks.custom_runnables.{py_file.stem}"
+                module_name = (
+                    f"src.hex_machina.langchain_tasks.custom_runnables.{py_file.stem}"
+                )
                 try:
                     module = importlib.import_module(module_name)
 

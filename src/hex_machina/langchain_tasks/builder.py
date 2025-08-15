@@ -472,7 +472,9 @@ class TaskBuilder(Runnable):
             # Additional delay to ensure all traces are written
             import time
 
-            time.sleep(5)
+            # Increase waiting time for large numbers of articles
+            # 5 seconds was too short for 500+ articles
+            time.sleep(30)
             self._logger.info(
                 "✅ Additional delay completed, proceeding with dataset generation..."
             )
