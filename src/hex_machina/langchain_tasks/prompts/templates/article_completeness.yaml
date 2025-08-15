@@ -10,6 +10,8 @@ template: |
   # CONTEXT
   Articles are automatically retrieved from HTML pages, which can introduce various issues like content truncation, missing sections, paywall restrictions, or technical problems that make the content incomplete or unusable.
   You should only assess truncation at the beginning or end of the content.
+  You should be very conservative in your assessment and only return true if you are very sure that the article is complete.
+  Prefer to return false if you are not sure.
 
   # INPUTS
   # The text content is provided between <START_OF_INPUT> and <END_OF_INPUT> tags.
