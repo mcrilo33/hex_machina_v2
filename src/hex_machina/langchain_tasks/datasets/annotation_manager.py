@@ -118,7 +118,6 @@ class AnnotationManager:
         """
         try:
             # Handle complex nested paths like ['generations'][0][0]['text']['is_complete']
-            breakpoint()
             if "['" in field_path and "']" in field_path:
                 # Navigate through the path step by step
                 current = obj
@@ -169,13 +168,12 @@ class AnnotationManager:
                             current = current[part]
                         else:
                             # Check if current is a JSON string that needs parsing
-                            if isinstance(current, str) and current.strip().startswith(
-                                ("{", "[")
+                            if isinstance(current, str) and (
+                                current.strip().startswith(("{", "["))
+                                or current.strip().startswith("```json")
                             ):
                                 try:
-                                    import json
-
-                                    parsed_json = json.loads(current)
+                                    parsed_json = self._parse_json_input(current)
                                     if (
                                         isinstance(parsed_json, dict)
                                         and part in parsed_json
@@ -183,7 +181,7 @@ class AnnotationManager:
                                         current = parsed_json[part]
                                     else:
                                         return None
-                                except (json.JSONDecodeError, KeyError):
+                                except KeyError:
                                     return None
                             else:
                                 return None
@@ -231,14 +229,15 @@ class AnnotationManager:
             if isinstance(obj, dict):
                 # Check if the current value is a JSON string
                 current_value = obj.get(field_name)
-                if isinstance(current_value, str) and current_value.strip().startswith(
-                    ("{", "[")
+                if isinstance(current_value, str) and (
+                    current_value.strip().startswith(("{", "["))
+                    or current_value.strip().startswith("```json")
                 ):
                     # Parse the JSON string
                     try:
                         import json
 
-                        parsed_json = json.loads(current_value)
+                        parsed_json = self._parse_json_input(current_value)
                         # Recursively set the value in the parsed JSON
                         updated_json = self._set_value(
                             parsed_json, remaining_path, value
@@ -246,7 +245,7 @@ class AnnotationManager:
                         # Convert back to string and update
                         updated_string = json.dumps(updated_json, ensure_ascii=False)
                         obj[field_name] = updated_string
-                    except json.JSONDecodeError as e:
+                    except Exception as e:
                         self._logger.error(f"Failed to parse JSON: {e}")
                         return obj
                 else:
@@ -271,14 +270,15 @@ class AnnotationManager:
                 if 0 <= index < len(obj):
                     # Check if the current value is a JSON string
                     current_value = obj[index]
-                    if isinstance(
-                        current_value, str
-                    ) and current_value.strip().startswith(("{", "[")):
+                    if isinstance(current_value, str) and (
+                        current_value.strip().startswith(("{", "["))
+                        or current_value.strip().startswith("```json")
+                    ):
                         # Parse the JSON string
                         try:
                             import json
 
-                            parsed_json = json.loads(current_value)
+                            parsed_json = self._parse_json_input(current_value)
                             # Recursively set the value in the parsed JSON
                             updated_json = self._set_value(
                                 parsed_json, remaining_path, value
@@ -288,7 +288,7 @@ class AnnotationManager:
                                 updated_json, ensure_ascii=False
                             )
                             obj[index] = updated_string
-                        except json.JSONDecodeError as e:
+                        except Exception as e:
                             self._logger.error(f"Failed to parse JSON: {e}")
                             return obj
                     else:
@@ -311,14 +311,15 @@ class AnnotationManager:
                 if isinstance(obj, dict) and path in obj:
                     # Check if the current value is a JSON string
                     current_value = obj[path]
-                    if isinstance(
-                        current_value, str
-                    ) and current_value.strip().startswith(("{", "[")):
+                    if isinstance(current_value, str) and (
+                        current_value.strip().startswith(("{", "["))
+                        or current_value.strip().startswith("```json")
+                    ):
                         # Parse the JSON string
                         try:
                             import json
 
-                            parsed_json = json.loads(current_value)
+                            parsed_json = self._parse_json_input(current_value)
                             # Recursively set the value in the parsed JSON
                             updated_json = self._set_value(parsed_json, "", value)
                             # Convert back to string and update
@@ -326,7 +327,7 @@ class AnnotationManager:
                                 updated_json, ensure_ascii=False
                             )
                             obj[path] = updated_string
-                        except json.JSONDecodeError as e:
+                        except Exception as e:
                             self._logger.error(f"Failed to parse JSON: {e}")
                             return obj
                     else:
@@ -350,14 +351,15 @@ class AnnotationManager:
             if isinstance(obj, dict) and field_name in obj:
                 # Check if the current value is a JSON string
                 current_value = obj[field_name]
-                if isinstance(current_value, str) and current_value.strip().startswith(
-                    ("{", "[")
+                if isinstance(current_value, str) and (
+                    current_value.strip().startswith(("{", "["))
+                    or current_value.strip().startswith("```json")
                 ):
                     # Parse the JSON string
                     try:
                         import json
 
-                        parsed_json = json.loads(current_value)
+                        parsed_json = self._parse_json_input(current_value)
                         # Recursively set the value in the parsed JSON
                         updated_json = self._set_value(
                             parsed_json, remaining_path, value
@@ -365,7 +367,7 @@ class AnnotationManager:
                         # Convert back to string and update
                         updated_string = json.dumps(updated_json, ensure_ascii=False)
                         obj[field_name] = updated_string
-                    except json.JSONDecodeError as e:
+                    except Exception as e:
                         self._logger.error(f"Failed to parse JSON: {e}")
                         return obj
                 else:
@@ -501,7 +503,9 @@ class AnnotationManager:
         Returns:
             Parsed JSON object or original string
         """
-        if value.startswith(("[", "{")) and value.endswith(("]", "}")):
+        if (
+            value.startswith(("[", "{")) and value.endswith(("]", "}"))
+        ) or value.startswith("```json"):
             try:
                 import json
 
@@ -549,9 +553,6 @@ class AnnotationManager:
                 pass
 
         for field_path in input_display_fields:
-            import ipdb
-
-            ipdb.set_trace()
             value = self._get_field_value(example.inputs, field_path)
             field_display = self._display_field(field_path, value)
 
