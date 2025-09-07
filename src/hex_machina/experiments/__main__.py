@@ -16,6 +16,7 @@ import yaml
 from dotenv import load_dotenv
 
 from ..langchain_tasks.cache_utils import clear_cache, get_cache_info
+from ..langchain_tasks.config_utils import resolve_env_vars
 from .config_models import ExperimentConfig
 from .runner import ExperimentRunner
 
@@ -49,7 +50,10 @@ def load_experiment_config(config_path: str) -> ExperimentConfig:
         with open(config_path, "r") as f:
             config_data = yaml.safe_load(f)
 
-        return ExperimentConfig(**config_data)
+        # Resolve environment variables in the config
+        resolved_config_data = resolve_env_vars(config_data)
+
+        return ExperimentConfig(**resolved_config_data)
     except Exception as e:
         print(f"Error loading experiment config: {e}")
         sys.exit(1)

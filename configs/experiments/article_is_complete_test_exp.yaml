@@ -1,7 +1,7 @@
 name: ArticleIsCompleteTestExp
 description: "Article is complete test experiment"
 
-target_dataset: "ArticleIsCompleteTask_article_completeness_20250814_171430"
+target_dataset: "ArticleIsCompleteTask_article_completeness_20250907_114536"
 
 # Specify which dataset splits to use for evaluation
 # Can be a single split name or list of splits
@@ -26,7 +26,6 @@ task:
       config:
         model: "google/gemini-2.5-flash"
         temperature: 0.0
-        max_tokens: 4000
         base_url: "https://openrouter.ai/api/v1"
         api_key: "${OPENROUTER_API_KEY}"
 

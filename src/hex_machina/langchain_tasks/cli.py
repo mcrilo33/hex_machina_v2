@@ -8,7 +8,6 @@ and explicit configuration.
 
 import argparse
 import logging
-import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -26,6 +25,7 @@ except ImportError:
 
 from .builder import TaskBuilder
 from .cache_utils import clear_cache, get_cache_info, setup_default_cache
+from .config_utils import resolve_env_vars
 from .datasets import StepDatasetManager
 
 
@@ -76,22 +76,9 @@ def load_yaml_config(config_path: Path) -> dict:
         with open(config_path, "r", encoding="utf-8") as f:
             config = yaml.safe_load(f)
             # Resolve environment variables in config values
-            return _resolve_env_vars(config)
+            return resolve_env_vars(config)
     except yaml.YAMLError as e:
         raise yaml.YAMLError(f"Failed to parse YAML file {config_path}: {e}")
-
-
-def _resolve_env_vars(obj):
-    """Recursively resolve environment variables in config values."""
-    if isinstance(obj, dict):
-        return {k: _resolve_env_vars(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [_resolve_env_vars(item) for item in obj]
-    elif isinstance(obj, str) and obj.startswith("${") and obj.endswith("}"):
-        env_var = obj[2:-1]  # Remove ${ and }
-        return os.getenv(env_var, obj)  # Return original if env var not found
-    else:
-        return obj
 
 
 def run_task(
