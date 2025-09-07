@@ -2,7 +2,7 @@
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from langchain_core.runnables import Runnable
 from langsmith import traceable
@@ -30,31 +30,32 @@ class EnrichmentSaver(Runnable):
     def invoke(
         self, inputs: Dict[str, Any], config: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Save enrichment to database and return enriched inputs.
+        """Save enrichments to database and return enriched inputs.
 
         Args:
-            inputs: Input dictionary or direct article (when used with .map())
+            inputs: Input dictionary containing enrichments list or direct article (when used with .map())
             config: Optional configuration override
 
         Returns:
             Enriched input dictionary
         """
         try:
-            # Extract article_id (one simple lookup)
-            article_id = self._extract_article_id(inputs)
-
-            # Extract content using input_mapping
-            content = self._extract_content(inputs)
-
-            # Auto-generate metadata as JSON
-            metadata = self._generate_metadata()
-
-            # Save to database
-            self._save_enrichment(article_id, content, metadata)
-
-            self._logger.info(
-                f"Saved {self.enrichment_type} enrichment for article {article_id}"
-            )
+            # Check if inputs contains a batch of enrichments
+            if "enrichments" in inputs and isinstance(inputs["enrichments"], list):
+                # Handle batch processing
+                self._save_batch_enrichments(inputs["enrichments"])
+                self._logger.info(
+                    f"Saved {len(inputs['enrichments'])} {self.enrichment_type} enrichments"
+                )
+            else:
+                # Handle single enrichment (legacy behavior)
+                article_id = self._extract_article_id(inputs)
+                content = self._extract_content(inputs)
+                metadata = self._generate_metadata()
+                self._save_enrichment(article_id, content, metadata)
+                self._logger.info(
+                    f"Saved {self.enrichment_type} enrichment for article {article_id}"
+                )
 
             # Return enriched inputs for next step
             return inputs
@@ -63,7 +64,41 @@ class EnrichmentSaver(Runnable):
             self._logger.error(f"Failed to save enrichment: {e}")
             raise
 
-    def _extract_article_id(self, inputs: Dict[str, Any]) -> int:
+    def _save_batch_enrichments(self, enrichments: List[Dict[str, Any]]) -> None:
+        """Save a batch of enrichments to database.
+
+        Args:
+            enrichments: List of enrichment dictionaries with article_id, content, enrichment_type, db_path
+        """
+        for enrichment in enrichments:
+            try:
+                article_id = enrichment["article_id"]
+                if isinstance(enrichment, dict):
+                    content = self._extract_content(enrichment)
+
+                # Use the enrichment_type from the enrichment data if available, otherwise use instance default
+                enrichment_type = enrichment.get(
+                    "enrichment_type", self.enrichment_type
+                )
+
+                # Generate metadata
+                metadata = self._generate_metadata()
+
+                # Save to database
+                self._save_enrichment(article_id, content, metadata, enrichment_type)
+
+                self._logger.debug(
+                    f"Saved {enrichment_type} enrichment for article {article_id}"
+                )
+
+            except Exception as e:
+                self._logger.error(
+                    f"Failed to save enrichment for article {enrichment.get('article_id', 'unknown')}: {e}"
+                )
+                # Continue with other enrichments even if one fails
+                continue
+
+    def _extract_article_id(self, inputs: Any) -> int:
         """Extract article_id from inputs (one simple lookup).
 
         Args:
@@ -101,19 +136,23 @@ class EnrichmentSaver(Runnable):
 
         # If still not found, try to get from the first article in the list
         if isinstance(inputs, list) and inputs:
-            if "id" in inputs[0]:
-                return inputs[0]["id"]
+            first_item = inputs[0]
+            if isinstance(first_item, dict) and "id" in first_item:
+                return first_item["id"]
 
         # Debug: Log what we actually have
-        self._logger.error(f"Available keys in inputs: {list(inputs.keys())}")
-        if "generate_article_summary" in inputs:
-            self._logger.error(
-                f"generate_article_summary content: {inputs['generate_article_summary']}"
-            )
+        if isinstance(inputs, dict):
+            self._logger.error(f"Available keys in inputs: {list(inputs.keys())}")
+            if "generate_article_summary" in inputs:
+                self._logger.error(
+                    f"generate_article_summary content: {inputs['generate_article_summary']}"
+                )
+        else:
+            self._logger.error(f"Inputs type: {type(inputs)}, content: {inputs}")
 
         raise ValueError("article_id not found in inputs")
 
-    def _extract_content(self, inputs: Dict[str, Any]) -> Any:
+    def _extract_content(self, inputs: Any) -> Any:
         """Extract content using input_mapping path.
 
         Args:
@@ -193,14 +232,24 @@ class EnrichmentSaver(Runnable):
             "enrichment_type": self.enrichment_type,
         }
 
-    def _save_enrichment(self, article_id: int, content: Any, metadata: Dict[str, Any]):
+    def _save_enrichment(
+        self,
+        article_id: int,
+        content: Any,
+        metadata: Dict[str, Any],
+        enrichment_type: Optional[str] = None,
+    ):
         """Save enrichment to database.
 
         Args:
             article_id: Article ID
             content: Enrichment content
             metadata: Auto-generated metadata
+            enrichment_type: Optional enrichment type override
         """
+        # Use provided enrichment_type or fall back to instance default
+        final_enrichment_type = enrichment_type or self.enrichment_type
+
         query = """
         INSERT INTO enrichments (article_id, enrichment_type, enrichment_data, source, tool_name, created_at)
         VALUES (?, ?, ?, ?, ?, ?)
@@ -208,7 +257,7 @@ class EnrichmentSaver(Runnable):
 
         params = {
             "article_id": article_id,
-            "enrichment_type": self.enrichment_type,
+            "enrichment_type": final_enrichment_type,
             "content": content,
             "source": "langchain_runnable",
             "tool_name": "EnrichmentSaver",

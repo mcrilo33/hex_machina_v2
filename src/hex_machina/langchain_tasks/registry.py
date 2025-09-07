@@ -206,6 +206,9 @@ class RunnableRegistry(Runnable):
                 f"Failed to auto-discover custom runnables from custom_runnables package: {e}"
             )
 
+        # All runnables are now discovered through the runnables module above
+        # The runnables module imports from core/, examples/, and experimental/ subdirectories
+
     def _register_custom_runnables(self) -> None:
         """Register custom runnables from configuration."""
         for name, import_path in self.config.custom_runnables.items():

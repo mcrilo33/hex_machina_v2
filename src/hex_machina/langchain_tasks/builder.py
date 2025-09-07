@@ -182,20 +182,23 @@ class ArticleFetcherTaskStrategy(TaskStrategy):
                     last_step_name = enrichment_step_names[-1]
                     if last_step_name in enriched_article:
                         content = enriched_article[last_step_name]
-
-                        # Convert content to string if it's a message object
-                        if hasattr(content, "text"):
-                            content = content.text
-                        elif hasattr(content, "content"):
+                        if hasattr(content, "content"):
                             content = content.content
 
                         # Create enrichment data
                         enrichment_data = {
                             "article_id": article_id,
                             "content": content,
-                            "enrichment_type": config.steps[-1].config.get(
-                                "enrichment_type", "keywords"
+                            "enrichment_type": (
+                                config.steps[-1].config["enrichment_type"]
+                                if "enrichment_type" in config.steps[-1].config
+                                else (_ for _ in ()).throw(
+                                    ValueError(
+                                        f"You should set enrichment_type in config for step {config.steps[-1].step_name}"
+                                    )
+                                )
                             ),
+                            # End of Selection
                             "db_path": config.steps[-1].config.get(
                                 "db_path", "storage/articles14.db"
                             ),

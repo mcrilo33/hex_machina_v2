@@ -25,7 +25,7 @@ steps:
     config:
       db_path: "storage/articles14.db"
       enrichment_type: "keywords"
-      input_mapping: "llm_processor.content"
+      input_mapping: "content"
 datasets:
   - name: "llm_keywords"
     description: "Dataset for evaluating the keyword extraction pipeline"
