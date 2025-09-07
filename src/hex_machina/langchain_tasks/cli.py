@@ -215,7 +215,7 @@ def main():
     )
     create_split_parser.add_argument(
         "--split-name",
-        default="positive",
+        default="positiplite",
         help="Name for the new split (default: positive)",
     )
 

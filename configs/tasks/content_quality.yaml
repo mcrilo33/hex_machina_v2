@@ -1,17 +1,17 @@
-name: ArticleIsCompleteTask
-description: "Task to check if an article is complete"
+name: ContentQualityTask
+description: "Task to check if the content is of high quality"
 steps:
   - name: fetch_articles
     runnable: ArticleFetcher
     config:
       db_path: "storage/articles14.db"
       filters:
-        limit: 10000
+        limit: 1000000
 
   - name: prompt_template
     runnable: PromptTemplate
     config:
-      prompt_name: "article_completeness"
+      prompt_name: "content_quality"
 
   - name: llm_processor
     runnable: ChatOpenAI
@@ -22,8 +22,8 @@ steps:
       base_url: "https://openrouter.ai/api/v1"
       api_key: "${OPENROUTER_API_KEY}"
 datasets:
-  - name: "article_completeness"
-    description: "Dataset for evaluating the article completeness"
+  - name: "content_quality"
+    description: "Dataset for evaluating the content quality"
     input_step: "prompt_template"
     output_step: "llm_processor"
 

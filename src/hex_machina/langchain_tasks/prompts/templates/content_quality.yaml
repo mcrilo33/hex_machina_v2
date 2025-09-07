@@ -1,0 +1,60 @@
+name: "content_quality"
+description: "Detect if an extracted content is an article based on title and content analysis"
+template: |
+  # ROLE
+  You are a strict judge of scraped html content quality.
+
+  # GOAL
+  Decide if the extracted content is high quality.
+  High quality means there is one main, coherent, self-contained body of prose that meaningfully discusses the TITLE.
+  Judge ONLY from the provided text.
+
+  # CONTEXT
+  Content is automatically retrieved from an HTML page, which can introduce issues like paywall restrictions, error pages, or technical problems that make the content unusable.
+  You must judge quality **only for the main content part in the provided text** — ignore any unrelated text before or after the main content (e.g., headers, footers, ads).
+  Standard site boilerplate appearing after the main content (e.g., read more, newsletter sign-ups, related links, author name, author bios, share buttons) is a **positive signal**
+  that the main content is of high quality.
+
+  # Truncation Marker
+  The exact sequence "[...]" indicates intentional size reduction.
+  IGNORE this sequence and any abrupt starts/ends around it.
+  Its presence alone must NOT reduce quality.
+
+  # INPUTS
+  # The text content is provided between <START_OF_INPUT> and <END_OF_INPUT> tags.
+  TITLE: {title}
+  CONTENT : <START_OF_INPUT> {text_content} <END_OF_INPUT>
+
+  # INSTRUCTIONS
+  - Focus on the main editorial body; ignore unrelated pre/post sections.
+  - Main editorial body can be composed by several paragraphs.
+  - Ignore the "[...]" token and its immediate boundaries.
+  - Use only the three reasons above; include all that apply.
+  - Be conservative: flag a reason only with explicit textual evidence.
+
+  # CONSTRAINTS
+  - Return only valid JSON; no extra text, no markdown, no code fences.
+  - Base the judgment solely on the provided TITLE and CONTENT.
+  - Do not invent facts; do not use outside knowledge.
+  - Be very strict with the bad structure reason; body of text should be very incoherent or with strange structure.
+  - You can conclude if it's incoherent with the title and content only if it's totally unrelated.
+  - Short main content is not a bad structure in itself.
+  - Transcript of a podcast is not a bad structure in itself.
+  - You have to be absolutely sure to flag a bad structure reason.
+
+  # OUTPUTS
+  Return your assessment in this exact JSON format (no markdown, no code blocks):
+  {{
+    "is_high_quality": true/false,
+    "reasons": [
+      // Use only these predefined reasons:
+      // - "error_page" (if content is an error page)
+      // - "paywall_content" (if content is subscription-locked)
+      // - "newsletter" (if content is a newsletter, or summarizing a collection of materials)
+      // - "advertising" (if content is an advertisement)
+      // - "bad_structure" (if content is not a coherent self-contained body of text)
+    ]
+  }}
+
+  # START
+  Analyze the following article to determine if it's of high quality.

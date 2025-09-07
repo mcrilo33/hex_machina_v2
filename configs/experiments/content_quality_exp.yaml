@@ -1,5 +1,6 @@
-name: ArticleIsCompleteTestExp
-description: "Article is complete test experiment"
+name: ContentQualityTestExp
+description: "Content quality test experiment"
+trace: false
 
 target_dataset: "ArticleIsCompleteTask_article_completeness_20250907_114536"
 

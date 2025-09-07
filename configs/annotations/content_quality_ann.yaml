@@ -1,0 +1,24 @@
+annotation_session:
+  name: "content_quality_annotation"
+  description: "Annotate content quality examples with quality and relevance scores"
+  
+  dataset:
+    name: "ContentQualityTask_content_quality_20250907_184833"
+    split: "bad_quality" #"uncomplete_example"
+  
+  display_fields:
+    inputs:
+      - "title"
+      - "url"
+      - "text_content"
+    outputs:
+      - "['generations'][0][0]['text']['is_high_quality']"
+  
+  annotation_fields:
+    outputs:
+      - name: "['generations'][0][0]['text']['is_high_quality']"
+        field_type: "replace"
+        options: "boolean"
+      - name: "['generations'][0][0]['text']['reasons']"
+        field_type: "replace"
+        options: "free_text"

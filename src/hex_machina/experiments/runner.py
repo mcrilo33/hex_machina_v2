@@ -9,7 +9,7 @@ for evaluation with LangSmith.
 import logging
 from typing import Any, Dict, List
 
-from langsmith import Client, traceable
+from langsmith import Client
 
 from ..langchain_tasks.builder import TaskBuilder
 from ..langchain_tasks.config.models import StepConfig, TaskConfig
@@ -101,15 +101,27 @@ class ExperimentRunner:
 
                     # Use the aevaluate method with only supported parameters
                     # Based on the LangSmith documentation: aevaluate(target, /[, data, evaluators, ...])
-                    from langsmith import trace
 
-                    with trace(
-                        name=f"Exp {i+1}: {config.name}",
-                        run_type="chain",
-                        project_name="hex-machina-v2",
-                        metadata=config.metadata,
-                        tags=[f"exp:{config.name}"],
-                    ) as run_tree:
+                    if config.trace == True:
+                        from langsmith import trace
+
+                        with trace(
+                            name=f"Exp {i+1}: {config.name}",
+                            run_type="chain",
+                            project_name="hex-machina-v2",
+                            metadata=config.metadata,
+                            tags=[f"exp:{config.name}"],
+                        ) as run_tree:
+                            result = await self.client.aevaluate(
+                                target,  # First positional argument
+                                data=target_dataset,
+                                evaluators=evaluators,
+                                experiment_prefix=config.name,  # Use experiment name as prefix
+                            )
+                        import ipdb
+
+                        ipdb.set_trace()
+                    else:
                         result = await self.client.aevaluate(
                             target,  # First positional argument
                             data=target_dataset,

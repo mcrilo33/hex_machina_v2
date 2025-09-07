@@ -118,6 +118,7 @@ class AnnotationManager:
         """
         try:
             # Handle complex nested paths like ['generations'][0][0]['text']['is_complete']
+            breakpoint()
             if "['" in field_path and "']" in field_path:
                 # Navigate through the path step by step
                 current = obj
@@ -504,7 +505,14 @@ class AnnotationManager:
             try:
                 import json
 
-                parsed_value = json.loads(value)
+                if "```json" in value:
+                    # Extract from markdown
+                    start = value.find("```json") + 7
+                    end = value.rfind("```")
+                    json_text = value[start:end].strip()
+                else:
+                    json_text = value.strip()
+                parsed_value = json.loads(json_text)
                 return parsed_value
             except json.JSONDecodeError:
                 return value
@@ -541,6 +549,9 @@ class AnnotationManager:
                 pass
 
         for field_path in input_display_fields:
+            import ipdb
+
+            ipdb.set_trace()
             value = self._get_field_value(example.inputs, field_path)
             field_display = self._display_field(field_path, value)
 

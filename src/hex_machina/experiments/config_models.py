@@ -31,6 +31,7 @@ class ExperimentConfig(BaseModel):
     name: str = Field(..., description="Name of the experiment")
     description: str = Field(..., description="Description of the experiment")
     target_dataset: str = Field(..., description="Reference to existing dataset")
+    trace: bool = Field(default=False, description="Whether to trace the experiment")
     task: TaskConfig = Field(..., description="Task configuration to evaluate")
     evaluators: List[EvaluatorConfig] = Field(..., description="List of evaluators")
     split: Optional[Union[str, List[str]]] = Field(
